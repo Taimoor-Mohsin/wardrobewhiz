@@ -18,5 +18,4 @@ backend/app/storage/uploads/*
 backend/app/storage/thumbnails/*
 backend/app/storage/faiss/*
 
-# Frontend (separate repo)
-Frontend/
+

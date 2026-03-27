@@ -16,6 +16,7 @@ def create_wardrobe_item(
     image_path: str,
     thumbnail_path: Optional[str],
     category: Optional[str],
+    subcategory: Optional[str] = None,
     dominant_colors: Optional[List[str]] = None,
     embedding_id: Optional[str] = None,
 ) -> WardrobeItem:
@@ -24,6 +25,7 @@ def create_wardrobe_item(
         image_path=image_path,
         thumbnail_path=thumbnail_path,
         category=category,
+        subcategory=subcategory,
         dominant_colors_json=json.dumps(dominant_colors or []),
         pattern_tags_json=json.dumps([]),
         occasion_tags_json=json.dumps([]),

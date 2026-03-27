@@ -2,9 +2,13 @@ import logging
 import logging.config
 
 from app.api.routes import feedback, health, outfits, profile, wardrobe
+from app.api.routes import adapter
+from app.core.config import settings
 from app.core.database import Base, engine
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.config.dictConfig({
@@ -33,6 +37,18 @@ Base.metadata.create_all(bind=engine)
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(title="WardrobeWhiz API", version="0.1.0")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8080", "http://localhost:5173", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Serve uploaded images and thumbnails as static files
+app.mount("/static/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
+app.mount("/static/thumbnails", StaticFiles(directory=settings.thumbnail_dir), name="thumbnails")
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -40,6 +56,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
+app.include_router(adapter.router, prefix="/api", tags=["Frontend API"])
 app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(profile.router, prefix="/profiles", tags=["Profiles"])
 app.include_router(wardrobe.router, prefix="/wardrobe", tags=["Wardrobe"])

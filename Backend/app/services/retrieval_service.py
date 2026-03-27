@@ -61,19 +61,25 @@ def retrieve_candidates(
     faiss_k = min(top_k * 3, 60)
     candidate_ids = search(faiss_dir, user_id, query_emb, top_k=faiss_k)
 
-    if not candidate_ids:
-        logger.info(f"FAISS returned 0 results for user {user_id}; falling back to DB scan")
-        return _fallback_scan(db, user_id, top_k)
+    # Always include all DB items so items without FAISS embeddings (e.g. after
+    # reclassification) are still considered. FAISS results come first for relevance.
+    all_db_items = _fallback_scan(db, user_id, top_k * 2)
 
-    # Fetch from DB
-    id_to_item = {
-        item.id: item
-        for item in db.query(WardrobeItem).filter(
-            WardrobeItem.id.in_(candidate_ids),
-            WardrobeItem.user_id == user_id,
-        ).all()
-    }
-    ordered = [id_to_item[cid] for cid in candidate_ids if cid in id_to_item]
+    if candidate_ids:
+        faiss_items = {
+            item.id: item
+            for item in db.query(WardrobeItem).filter(
+                WardrobeItem.id.in_(candidate_ids),
+                WardrobeItem.user_id == user_id,
+            ).all()
+        }
+        ordered_faiss = [faiss_items[cid] for cid in candidate_ids if cid in faiss_items]
+        faiss_ids = {item.id for item in ordered_faiss}
+        # Append DB items not already in FAISS results
+        ordered = ordered_faiss + [i for i in all_db_items if i.id not in faiss_ids]
+    else:
+        logger.info(f"FAISS returned 0 results for user {user_id}; using DB scan only")
+        ordered = all_db_items
 
     # Re-rank by user preference scores (positive = liked, negative = disliked)
     if preference_scores:

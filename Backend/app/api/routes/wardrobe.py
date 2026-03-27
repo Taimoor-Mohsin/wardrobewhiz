@@ -9,7 +9,7 @@ from app.schemas.wardrobe import WardrobeItemResponse, WardrobeItemUpdate, Wardr
 from app.services import wardrobe_service
 from app.services.embedding_service import get_image_embedding
 from app.services.faiss_service import add_embedding, remove_embedding
-from app.services.image_service import process_upload
+from app.services.image_service import classify_category_from_image, process_upload
 from app.services.profile_service import get_user
 
 router = APIRouter()
@@ -45,6 +45,7 @@ async def upload_wardrobe_item(
         image_path=upload_result["image_path"],
         thumbnail_path=upload_result["thumbnail_path"],
         category=upload_result["category"],
+        subcategory=upload_result["subcategory"],
         dominant_colors=upload_result["dominant_colors"],
     )
 
@@ -110,6 +111,28 @@ def update_wardrobe_item(
         raise HTTPException(status_code=404, detail="Wardrobe item not found")
     data = wardrobe_service.serialize_item(item)
     return WardrobeItemResponse(**data)
+
+
+@router.post("/reclassify/{user_id}")
+def reclassify_wardrobe_items(user_id: int, db: Session = Depends(get_db)):
+    """Re-run CLIP classification on all wardrobe items that are missing a category."""
+    user = get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    items = wardrobe_service.get_user_items(db, user_id, limit=1000)
+    updated = 0
+    for item in items:
+        if item.category:
+            continue
+        category, subcategory = classify_category_from_image(item.image_path)
+        if category:
+            item.category = category
+            item.subcategory = subcategory
+            updated += 1
+
+    db.commit()
+    return {"reclassified": updated, "total": len(items)}
 
 
 @router.delete("/item/{item_id}", status_code=status.HTTP_204_NO_CONTENT)

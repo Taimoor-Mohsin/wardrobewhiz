@@ -1,12 +1,16 @@
 import json
+import logging
 import os
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from PIL import Image
 
+from app.services.processing_service import process_image
 from app.utils.color_utils import extract_dominant_colors
 from app.utils.image_utils import create_thumbnail, open_image, save_upload, validate_image
+
+logger = logging.getLogger(__name__)
 
 # Simple category heuristics based on filename keywords (fallback when no ML)
 CATEGORY_KEYWORDS = {
@@ -129,11 +133,44 @@ def process_upload(
 
     Returns a dict with: image_path, thumbnail_path, dominant_colors, category, subcategory
     """
+    image_path = save_validated_upload(
+        file_bytes=file_bytes,
+        filename=filename,
+        upload_dir=upload_dir,
+    )
+    processing_result = process_image(image_path)
+    logger.info(
+        "Advanced processing placeholder completed for %s: %s",
+        filename,
+        processing_result.get("message"),
+    )
+    upload_details = analyze_saved_upload(
+        image_path=image_path,
+        filename=filename,
+        thumbnail_dir=thumbnail_dir,
+    )
+    return {"image_path": image_path, **upload_details}
+
+
+def save_validated_upload(
+    file_bytes: bytes,
+    filename: str,
+    upload_dir: str,
+) -> str:
+    """Validate an upload and save it to disk, returning the saved image path."""
     valid, msg = validate_image(file_bytes, filename)
     if not valid:
         raise ValueError(msg)
 
-    image_path = save_upload(file_bytes, filename, upload_dir)
+    return save_upload(file_bytes, filename, upload_dir)
+
+
+def analyze_saved_upload(
+    image_path: str,
+    filename: str,
+    thumbnail_dir: str,
+) -> Dict:
+    """Generate derived upload data for an already-saved image."""
     thumbnail_path = create_thumbnail(image_path, thumbnail_dir)
 
     img = open_image(image_path)
@@ -146,7 +183,6 @@ def process_upload(
         category = _guess_category(filename)
 
     return {
-        "image_path": image_path,
         "thumbnail_path": thumbnail_path,
         "dominant_colors": dominant_colors,
         "category": category,

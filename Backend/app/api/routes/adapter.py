@@ -163,6 +163,7 @@ def _get_outfit_with_items(outfit_id: int, db: Session) -> Optional[Dict]:
 
 def _process_file_bytes(file_bytes: bytes, filename: str, notes: str, db: Session) -> Dict[str, Any]:
     """Process already-read file bytes into a wardrobe item."""
+    logger.info("Starting upload processing for %s (%d bytes)", filename, len(file_bytes))
     try:
         result = process_upload(
             file_bytes=file_bytes,
@@ -170,19 +171,32 @@ def _process_file_bytes(file_bytes: bytes, filename: str, notes: str, db: Sessio
             upload_dir=settings.upload_dir,
             thumbnail_dir=settings.thumbnail_dir,
         )
+        logger.info(
+            "process_upload succeeded for %s image=%s thumbnail=%s category=%s subcategory=%s",
+            filename,
+            result["image_path"],
+            result["thumbnail_path"],
+            result["category"],
+            result["subcategory"],
+        )
     except ValueError as e:
         logger.warning("process_upload rejected %s: %s", filename, e)
         raise HTTPException(status_code=422, detail=str(e))
 
-    item = wardrobe_service.create_wardrobe_item(
-        db=db,
-        user_id=DEFAULT_USER_ID,
-        image_path=result["image_path"],
-        thumbnail_path=result["thumbnail_path"],
-        category=result["category"],
-        subcategory=result["subcategory"],
-        dominant_colors=result["dominant_colors"],
-    )
+    try:
+        item = wardrobe_service.create_wardrobe_item(
+            db=db,
+            user_id=DEFAULT_USER_ID,
+            image_path=result["image_path"],
+            thumbnail_path=result["thumbnail_path"],
+            category=result["category"],
+            subcategory=result["subcategory"],
+            dominant_colors=result["dominant_colors"],
+        )
+        logger.info("DB insert succeeded for %s with item_id=%s", filename, item.id)
+    except Exception:
+        logger.exception("DB insert failed for %s", filename)
+        raise
 
     embedding = get_image_embedding(result["image_path"])
     if embedding:
@@ -197,7 +211,9 @@ def _process_file_bytes(file_bytes: bytes, filename: str, notes: str, db: Sessio
         db.commit()
         db.refresh(item)
 
-    return _item_to_frontend(item)
+    frontend_item = _item_to_frontend(item)
+    logger.info("Prepared frontend item for %s with item_id=%s", filename, item.id)
+    return frontend_item
 
 
 # ── Wardrobe routes ────────────────────────────────────────────────────────────
@@ -247,7 +263,9 @@ async def upload_wardrobe_item_api(
     db: Session = Depends(get_db),
 ):
     file_bytes = await file.read()
-    return _process_file_bytes(file_bytes, file.filename or "upload.jpg", notes, db)
+    filename = file.filename or "upload.jpg"
+    logger.info("Single upload request received for %s (%d bytes)", filename, len(file_bytes))
+    return _process_file_bytes(file_bytes, filename, notes, db)
 
 
 @router.post("/wardrobe")
@@ -447,16 +465,18 @@ async def upload_batch_api(
     items = []
     errors = []
     for f in files:
+        filename = f.filename or "upload.jpg"
         try:
             file_bytes = await f.read()
-            filename = f.filename or "upload.jpg"
             logger.info("Batch uploading file: %s (%d bytes)", filename, len(file_bytes))
             item = _process_file_bytes(file_bytes, filename, "", db)
             items.append(item)
+            logger.info("Appended uploaded item for %s to batch response", filename)
         except HTTPException as e:
-            logger.warning("Upload skipped %s: %s", f.filename, e.detail)
-            errors.append(e.detail)
+            logger.warning("Upload skipped %s: %s", filename, e.detail)
+            errors.append(f"{filename}: {e.detail}")
         except Exception as e:
-            logger.exception("Unexpected error uploading %s", f.filename)
-            errors.append(str(e))
-    return {"items": items, "errors": errors if errors else None}
+            logger.exception("Unexpected error uploading %s", filename)
+            errors.append(f"{filename}: {e}")
+    logger.info("Batch upload completed with %d items and %d errors", len(items), len(errors))
+    return {"items": items, "errors": errors}

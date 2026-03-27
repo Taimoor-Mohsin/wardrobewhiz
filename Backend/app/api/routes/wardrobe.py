@@ -1,21 +1,24 @@
-import json
-
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy.orm import Session
-
 from app.core.config import settings
 from app.core.database import get_db
-from app.schemas.wardrobe import WardrobeItemResponse, WardrobeItemUpdate, WardrobeListResponse
+from app.schemas.wardrobe import (
+    WardrobeItemResponse,
+    WardrobeItemUpdate,
+    WardrobeListResponse,
+)
 from app.services import wardrobe_service
 from app.services.embedding_service import get_image_embedding
 from app.services.faiss_service import add_embedding, remove_embedding
 from app.services.image_service import classify_category_from_image, process_upload
 from app.services.profile_service import get_user
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
 
-@router.post("/upload", response_model=WardrobeItemResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/upload", response_model=WardrobeItemResponse, status_code=status.HTTP_201_CREATED
+)
 async def upload_wardrobe_item(
     user_id: int = Form(...),
     notes: str = Form(default=""),
@@ -27,11 +30,12 @@ async def upload_wardrobe_item(
         raise HTTPException(status_code=404, detail="User not found")
 
     file_bytes = await file.read()
+    filename = file.filename or "upload.jpg"
 
     try:
         upload_result = process_upload(
             file_bytes=file_bytes,
-            filename=file.filename,
+            filename=filename,
             upload_dir=settings.upload_dir,
             thumbnail_dir=settings.thumbnail_dir,
         )
@@ -85,9 +89,13 @@ def list_wardrobe(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    items = wardrobe_service.get_user_items(db, user_id, category=category, skip=skip, limit=limit)
+    items = wardrobe_service.get_user_items(
+        db, user_id, category=category, skip=skip, limit=limit
+    )
     total = wardrobe_service.count_user_items(db, user_id)
-    serialized = [WardrobeItemResponse(**wardrobe_service.serialize_item(i)) for i in items]
+    serialized = [
+        WardrobeItemResponse(**wardrobe_service.serialize_item(i)) for i in items
+    ]
     return WardrobeListResponse(items=serialized, total=total)
 
 

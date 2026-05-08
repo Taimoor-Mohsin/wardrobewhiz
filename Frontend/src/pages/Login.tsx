@@ -10,17 +10,22 @@ import { useAuth } from "@/hooks/use-auth";
 import { BackButton } from "@/components/common/BackButton";
 
 const Login = () => {
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { login } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    const result = login(username.trim(), password.trim());
+    setIsSubmitting(true);
+
+    const result = await login(email, password);
+    setIsSubmitting(false);
+
     if (result.success) {
       toast({
         title: "Welcome back!",
@@ -29,6 +34,7 @@ const Login = () => {
       navigate("/dashboard");
       return;
     }
+
     setError(result.message ?? "Unable to sign in. Please try again.");
   };
 
@@ -47,14 +53,15 @@ const Login = () => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
-                id="username"
-                type="text"
-                placeholder="admin"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -62,23 +69,20 @@ const Login = () => {
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full" size="lg">
-              Log In
+            <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+              {isSubmitting ? "Signing in..." : "Log In"}
             </Button>
           </form>
         </CardContent>
         <CardFooter className="flex flex-col space-y-4">
-          <p className="text-xs text-muted-foreground text-center">
-            Demo credentials — Username: <span className="font-semibold text-foreground">admin</span>, Password:
-            <span className="font-semibold text-foreground"> admin123</span>
-          </p>
           <div className="text-sm text-muted-foreground text-center">
             Don't have an account?{" "}
             <Link to="/register" className="text-primary hover:underline font-medium">

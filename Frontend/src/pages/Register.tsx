@@ -7,19 +7,25 @@ import { Sparkles } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { BackButton } from "@/components/common/BackButton";
+import { useAuth } from "@/hooks/use-auth";
 
 const Register = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { register } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setError("");
+
     if (password !== confirmPassword) {
+      setError("Passwords do not match.");
       toast({
         title: "Error",
         description: "Passwords do not match.",
@@ -27,13 +33,21 @@ const Register = () => {
       });
       return;
     }
-    
-    // TODO: Implement actual registration
-    toast({
-      title: "Welcome to WardrobeWiz!",
-      description: "Your account has been created.",
-    });
-    navigate("/dashboard");
+
+    setIsSubmitting(true);
+    const result = await register({ name, email, password });
+    setIsSubmitting(false);
+
+    if (result.success) {
+      toast({
+        title: "Welcome to WardrobeWiz!",
+        description: "Your account has been created.",
+      });
+      navigate("/dashboard");
+      return;
+    }
+
+    setError(result.message ?? "Unable to create your account. Please try again.");
   };
 
   return (
@@ -59,6 +73,7 @@ const Register = () => {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -70,6 +85,7 @@ const Register = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -77,10 +93,11 @@ const Register = () => {
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -88,14 +105,16 @@ const Register = () => {
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="••••••••"
+                placeholder="Confirm password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </div>
-            <Button type="submit" className="w-full" size="lg" variant="hero">
-              Create Account
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" className="w-full" size="lg" variant="hero" disabled={isSubmitting}>
+              {isSubmitting ? "Creating account..." : "Create Account"}
             </Button>
           </form>
         </CardContent>

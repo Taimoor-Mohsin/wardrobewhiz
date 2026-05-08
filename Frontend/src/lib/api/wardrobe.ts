@@ -1,0 +1,177 @@
+import apiClient from "./client";
+import type { WardrobeItem, WardrobeFilters, WardrobeStats, WardrobeItemMetadata } from "@/types/wardrobe";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+const STATIC_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, "");
+const NEUTRAL_SWATCH_HEX = "#9CA3AF";
+
+const FASHION_COLOR_TO_HEX: Record<string, string> = {
+  black: "#181818",
+  white: "#F5F5F5",
+  grey: "#808080",
+  gray: "#808080",
+  navy: "#283856",
+  blue: "#4273BE",
+  "light blue": "#A8C6E6",
+  "denim blue": "#5C7094",
+  red: "#BA2D34",
+  maroon: "#742636",
+  pink: "#D68AA2",
+  green: "#4D7952",
+  olive: "#6F743F",
+  mint: "#A6D1B4",
+  yellow: "#E4C658",
+  mustard: "#B69136",
+  orange: "#D17D44",
+  beige: "#D2BE9E",
+  cream: "#F4ECDD",
+  brown: "#6E4F3A",
+  tan: "#B2916A",
+  khaki: "#A39A6D",
+  purple: "#805E90",
+};
+
+const buildSegmentedImageUrl = (segmentedImagePath?: string): string | undefined => {
+  if (!segmentedImagePath) {
+    return undefined;
+  }
+
+  const filename = segmentedImagePath.split(/[/\\]/).pop();
+  if (!filename) {
+    return undefined;
+  }
+
+  return `${STATIC_BASE_URL}/static/segmented/${filename}`;
+};
+
+const normalizeColorLabel = (value?: string): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+
+  return value.trim().toLowerCase();
+};
+
+const isHexColor = (value?: string): boolean =>
+  Boolean(value && /^#(?:[0-9a-fA-F]{3}){1,2}$/.test(value));
+
+const getWardrobeSwatchHex = (rawColor?: string): string => {
+  if (isHexColor(rawColor)) {
+    return rawColor!;
+  }
+
+  const normalizedLabel = normalizeColorLabel(rawColor);
+  if (!normalizedLabel) {
+    return NEUTRAL_SWATCH_HEX;
+  }
+
+  return FASHION_COLOR_TO_HEX[normalizedLabel] || NEUTRAL_SWATCH_HEX;
+};
+
+const formatColorLabel = (rawColor?: string): string | undefined => {
+  if (!rawColor) {
+    return undefined;
+  }
+
+  if (isHexColor(rawColor)) {
+    return undefined;
+  }
+
+  return rawColor
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+};
+
+export const normalizeWardrobeItem = (item: WardrobeItem): WardrobeItem => {
+  const rawApiColor = item.color;
+  const swatchColorHex = getWardrobeSwatchHex(rawApiColor);
+  const colorLabel = formatColorLabel(rawApiColor);
+  const normalizedItem = {
+    ...item,
+    color: swatchColorHex,
+    colorLabel,
+    swatchColorHex,
+    segmentedImageUrl: buildSegmentedImageUrl(item.segmented_image_path),
+  };
+
+  console.log("[wardrobeApi] Normalized wardrobe item", {
+    id: item.id,
+    rawApiColor,
+    normalizedColor: normalizedItem.color,
+    swatchColorHex: normalizedItem.swatchColorHex,
+    colorLabel: normalizedItem.colorLabel,
+    segmented_image_path: item.segmented_image_path,
+    segmentedImageUrl: normalizedItem.segmentedImageUrl,
+    subcategory: item.subcategory,
+  });
+
+  return normalizedItem;
+};
+
+export const wardrobeApi = {
+  // Get all wardrobe items
+  getWardrobe: async (filters?: WardrobeFilters): Promise<WardrobeItem[]> => {
+    const response = await apiClient.get("/wardrobe", { params: filters });
+    return response.data.map(normalizeWardrobeItem);
+  },
+
+  // Get single wardrobe item
+  getWardrobeItem: async (id: string): Promise<WardrobeItem> => {
+    const response = await apiClient.get(`/wardrobe/${id}`);
+    return normalizeWardrobeItem(response.data);
+  },
+
+  // Upload wardrobe items with images
+  uploadWardrobeItems: async (
+    formData: FormData
+  ): Promise<{ items: WardrobeItem[]; errors?: string[] }> => {
+    const response = await apiClient.post("/wardrobe/upload", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data;
+  },
+
+  // Create wardrobe item
+  createWardrobeItem: async (
+    item: Omit<WardrobeItem, "id" | "userId" | "createdAt" | "updatedAt" | "wearCount">
+  ): Promise<WardrobeItem> => {
+    const response = await apiClient.post("/wardrobe", item);
+    return normalizeWardrobeItem(response.data);
+  },
+
+  // Update wardrobe item
+  updateWardrobeItem: async (
+    id: string,
+    updates: Partial<WardrobeItemMetadata>
+  ): Promise<WardrobeItem> => {
+    console.log("[wardrobeApi] updateWardrobeItem request", {
+      id,
+      updates,
+    });
+    const response = await apiClient.patch(`/wardrobe/${id}`, updates);
+    console.log("[wardrobeApi] updateWardrobeItem response", response.data);
+    return normalizeWardrobeItem(response.data);
+  },
+
+  // Delete wardrobe item
+  deleteWardrobeItem: async (id: string): Promise<void> => {
+    await apiClient.delete(`/wardrobe/${id}`);
+  },
+
+  // Get wardrobe statistics
+  getWardrobeStats: async (): Promise<WardrobeStats> => {
+    const response = await apiClient.get("/wardrobe/stats");
+    return response.data;
+  },
+
+  // Mark item as worn
+  markItemWorn: async (id: string): Promise<WardrobeItem> => {
+    const response = await apiClient.post(`/wardrobe/${id}/worn`);
+    return normalizeWardrobeItem(response.data);
+  },
+};
+

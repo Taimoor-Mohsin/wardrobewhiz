@@ -9,7 +9,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { Home, ShoppingBag, Sparkles, Heart, BarChart3, Settings } from "lucide-react";
+import { Home, ShoppingBag, Sparkles, Heart, BarChart3, Settings, User } from "lucide-react";
 
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
@@ -17,6 +17,7 @@ const menuItems = [
   { title: "Recommend", url: "/dashboard/recommend", icon: Sparkles },
   { title: "Outfits", url: "/dashboard/outfits", icon: Heart },
   { title: "Analytics", url: "/dashboard/analytics", icon: BarChart3 },
+  { title: "Profile", url: "/dashboard/profile", icon: User },
   { title: "Settings", url: "/dashboard/settings", icon: Settings },
 ];
 

@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/use-auth";
+import { AuthRedirect } from "@/components/routing/AuthRedirect";
 import { ProtectedRoute } from "@/components/routing/ProtectedRoute";
 import { ProfileCompletionGate } from "@/components/routing/ProfileCompletionGate";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
@@ -17,6 +18,7 @@ import WardrobeUpload from "./pages/dashboard/WardrobeUpload";
 import Recommend from "./pages/dashboard/Recommend";
 import Outfits from "./pages/dashboard/Outfits";
 import Analytics from "./pages/dashboard/Analytics";
+import Profile from "./pages/dashboard/Profile";
 import Settings from "./pages/dashboard/Settings";
 import Onboarding from "./pages/dashboard/Onboarding";
 import Demo from "./pages/Demo";
@@ -48,9 +50,30 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
+            <Route
+              path="/"
+              element={
+                <AuthRedirect>
+                  <Landing />
+                </AuthRedirect>
+              }
+            />
+            <Route
+              path="/login"
+              element={
+                <AuthRedirect>
+                  <Login />
+                </AuthRedirect>
+              }
+            />
+            <Route
+              path="/register"
+              element={
+                <AuthRedirect>
+                  <Register />
+                </AuthRedirect>
+              }
+            />
             <Route path="/demo" element={<Demo />} />
             <Route path="/architecture" element={<Architecture />} />
             <Route path="/documentation" element={<Documentation />} />
@@ -95,6 +118,7 @@ const App = () => (
               <Route path="recommend" element={<Recommend />} />
               <Route path="outfits" element={<Outfits />} />
               <Route path="analytics" element={<Analytics />} />
+              <Route path="profile" element={<Profile />} />
               <Route path="settings" element={<Settings />} />
             </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

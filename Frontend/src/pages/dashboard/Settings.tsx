@@ -1,15 +1,9 @@
-import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StyleQuestionnaire } from "@/components/style/StyleQuestionnaire";
-import { StylePreferencesForm } from "@/components/style/StylePreferencesForm";
-import type { StylePreferences, StyleQuestionnaireResponse } from "@/types/style";
-import { toast } from "sonner";
+import { StyleProfileForm } from "@/components/style/StyleProfileForm";
 
 const Settings = () => {
   return (
@@ -17,7 +11,7 @@ const Settings = () => {
       <div>
         <h1 className="text-3xl font-semibold text-foreground">Settings & preferences</h1>
         <p className="text-muted-foreground mt-2">
-          These forms are purely frontend for now—hook them to APIs later when auth and backend are ready.
+          Manage your account details and keep your personalization profile current.
         </p>
       </div>
 
@@ -85,69 +79,9 @@ const Settings = () => {
         </CardContent>
       </Card>
 
-      <Card className="shadow-card">
-        <CardHeader>
-          <CardTitle>Style Profiling</CardTitle>
-          <CardDescription>
-            Complete the style questionnaire to help WardrobeWiz understand your preferences
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="questionnaire" className="w-full">
-            <TabsList>
-              <TabsTrigger value="questionnaire">Questionnaire</TabsTrigger>
-              <TabsTrigger value="preferences">Preferences</TabsTrigger>
-            </TabsList>
-            <TabsContent value="questionnaire">
-              <StyleQuestionnaire
-                steps={[
-                  {
-                    id: "color-preference",
-                    title: "Color Preferences",
-                    question: "What colors do you prefer in your wardrobe?",
-                    type: "multiple-choice",
-                    options: ["Neutral", "Bold", "Pastel", "Dark", "Light", "Mixed"],
-                    required: true,
-                  },
-                  {
-                    id: "style-aesthetic",
-                    title: "Style Aesthetic",
-                    question: "Which style aesthetics resonate with you?",
-                    type: "multi-select",
-                    options: ["Minimalist", "Classic", "Casual", "Formal", "Bohemian", "Streetwear"],
-                    required: true,
-                  },
-                ]}
-                onComplete={(responses, preferences) => {
-                  toast.success("Style profile saved!");
-                  console.log("Questionnaire responses:", responses);
-                  console.log("Style preferences:", preferences);
-                }}
-              />
-            </TabsContent>
-            <TabsContent value="preferences">
-              <StylePreferencesForm
-                preferences={{
-                  colors: {
-                    primary: [],
-                    secondary: [],
-                    accent: [],
-                  },
-                  aesthetics: [],
-                  fit: "Regular",
-                }}
-                onChange={(preferences) => {
-                  toast.success("Preferences updated!");
-                  console.log("Updated preferences:", preferences);
-                }}
-              />
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+      <StyleProfileForm />
     </div>
   );
 };
 
 export default Settings;
-

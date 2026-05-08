@@ -8,6 +8,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { BackButton } from "@/components/common/BackButton";
 import { useAuth } from "@/hooks/use-auth";
+import { profileApi } from "@/lib/api/profile";
 
 const Register = () => {
   const [name, setName] = useState("");
@@ -39,11 +40,19 @@ const Register = () => {
     setIsSubmitting(false);
 
     if (result.success) {
+      let destination = "/dashboard/onboarding";
+      try {
+        const completion = await profileApi.getCompletionStatus();
+        destination = completion.profile_completed ? "/dashboard" : "/dashboard/onboarding";
+      } catch {
+        destination = "/dashboard/onboarding";
+      }
+
       toast({
         title: "Welcome to WardrobeWiz!",
         description: "Your account has been created.",
       });
-      navigate("/dashboard");
+      navigate(destination);
       return;
     }
 

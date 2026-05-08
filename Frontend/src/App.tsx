@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/components/routing/ProtectedRoute";
+import { ProfileCompletionGate } from "@/components/routing/ProfileCompletionGate";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -17,6 +18,7 @@ import Recommend from "./pages/dashboard/Recommend";
 import Outfits from "./pages/dashboard/Outfits";
 import Analytics from "./pages/dashboard/Analytics";
 import Settings from "./pages/dashboard/Settings";
+import Onboarding from "./pages/dashboard/Onboarding";
 import Demo from "./pages/Demo";
 import Architecture from "./pages/Architecture";
 import Documentation from "./pages/Documentation";
@@ -66,10 +68,24 @@ const App = () => (
             <Route path="/terms" element={<Terms />} />
             <Route path="/security" element={<Security />} />
             <Route
+              path="/dashboard/onboarding"
+              element={
+                <ProtectedRoute>
+                  <ProfileCompletionGate>
+                    <Dashboard>
+                      <Onboarding />
+                    </Dashboard>
+                  </ProfileCompletionGate>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/dashboard"
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <ProfileCompletionGate>
+                    <Dashboard />
+                  </ProfileCompletionGate>
                 </ProtectedRoute>
               }
             >

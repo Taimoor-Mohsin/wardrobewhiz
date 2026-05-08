@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     upload_dir: str = "app/storage/uploads"
     thumbnail_dir: str = "app/storage/thumbnails"
     faiss_dir: str = "app/storage/faiss"
+    jwt_secret_key: str = "wardrobewhiz-dev-secret-change-me"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -67,6 +67,15 @@ def profile_to_read(profile: UserProfile) -> ProfileRead:
         fit_preference=profile.fit_preference,
         layering_preference=profile.layering_preference,
         accessories_preference=profile.accessories_preference,
+        height=profile.height,
+        weight=profile.weight,
+        collar=profile.collar,
+        waist=profile.waist,
+        inseam=profile.inseam,
+        shoe_size=profile.shoe_size,
+        chest=profile.chest,
+        shoulder=profile.shoulder,
+        sleeve_length=profile.sleeve_length,
         profile_completed=profile.profile_completed,
         completed_at=profile.completed_at,
         created_at=profile.created_at,
@@ -106,6 +115,15 @@ def get_missing_completion_fields(profile: UserProfile) -> list[str]:
         missing_fields.append("accessories_preference")
 
     return missing_fields
+
+
+def get_completion_percentage(profile: UserProfile, missing_fields: list[str]) -> int:
+    total_fields = 11
+    if "Other" in decode_list(profile.usual_contexts_json):
+        total_fields += 1
+
+    completed_fields = max(total_fields - len(missing_fields), 0)
+    return round((completed_fields / total_fields) * 100)
 
 
 def update_completion(profile: UserProfile) -> list[str]:
@@ -163,4 +181,5 @@ def read_my_profile_completion(
     return ProfileCompletionStatus(
         profile_completed=not missing_fields,
         missing_fields=missing_fields,
+        completion_percentage=get_completion_percentage(profile, missing_fields),
     )

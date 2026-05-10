@@ -25,6 +25,15 @@ export interface UserProfile {
   fit_preference?: FitPreference | string | null;
   layering_preference?: LayeringPreference | string | null;
   accessories_preference?: AccessoriesPreference | string | null;
+  height?: string | null;
+  weight?: string | null;
+  collar?: string | null;
+  waist?: string | null;
+  inseam?: string | null;
+  shoe_size?: string | null;
+  chest?: string | null;
+  shoulder?: string | null;
+  sleeve_length?: string | null;
   profile_completed: boolean;
   completed_at?: string | null;
   created_at?: string | null;
@@ -49,10 +58,20 @@ export type ProfileUpdatePayload = Partial<
     | "fit_preference"
     | "layering_preference"
     | "accessories_preference"
+    | "height"
+    | "weight"
+    | "collar"
+    | "waist"
+    | "inseam"
+    | "shoe_size"
+    | "chest"
+    | "shoulder"
+    | "sleeve_length"
   >
 >;
 
 export interface ProfileCompletionStatus {
   profile_completed: boolean;
   missing_fields: string[];
+  completion_percentage: number;
 }

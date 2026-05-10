@@ -1,10 +1,12 @@
 from app.api.routes import auth, health, profile, wardrobe
 from app.core.database import Base, engine
+from app.core.dev_migrations import apply_sqlite_dev_migrations
 from app.models import profile as profile_model, user, wardrobe_item  # noqa: F401
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 Base.metadata.create_all(bind=engine)
+apply_sqlite_dev_migrations(engine)
 
 app = FastAPI(title="WardrobeWhiz API")
 

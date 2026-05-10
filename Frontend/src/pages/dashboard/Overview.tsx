@@ -7,6 +7,7 @@ import { UploadCloud, MessageSquare, Sparkles, ShoppingBag, Ruler, Wand2 } from 
 import { cn } from "@/lib/utils";
 import { useWardrobe } from "@/hooks/useWardrobe";
 import { useOutfitGeneration } from "@/hooks/useOutfitGeneration";
+import { useProfile } from "@/hooks/useProfile";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const wardrobeInspo = [
@@ -32,23 +33,16 @@ const wardrobeInspo = [
   },
 ];
 
-const defaultProfile = {
-  height: `5'9"`,
-  weight: "72 kg",
-  collar: `15.5"`,
-  waist: `32"`,
-};
-
 const Overview = () => {
   const { items, stats, isLoading: isLoadingWardrobe } = useWardrobe();
   const { savedOutfits, isLoadingSaved } = useOutfitGeneration();
+  const { profile: userProfile, isLoading: isLoadingProfile } = useProfile();
   
   const [messages, setMessages] = useState([
     { role: "bot" as const, content: "Hi! Ask me anything about your closet or share a vibe you're going for." },
   ]);
   const [chatInput, setChatInput] = useState("");
   const [uploadedItems, setUploadedItems] = useState<{ name: string; size: string }[]>([]);
-  const [profile, setProfile] = useState(defaultProfile);
   const [outfitPrompt, setOutfitPrompt] = useState("Board meeting in humid weather");
   const [outfitIdeas, setOutfitIdeas] = useState([
     "Navy chore coat + breathable oxford + tapered chinos",
@@ -84,10 +78,6 @@ const Overview = () => {
         size: `${(file.size / 1024).toFixed(1)} KB`,
       })),
     );
-  };
-
-  const handleProfileChange = (key: keyof typeof defaultProfile, value: string) => {
-    setProfile((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleOutfitSubmit = (e: React.FormEvent) => {
@@ -182,15 +172,16 @@ const Overview = () => {
             <CardDescription>Set the measurements WardrobeWiz should remember.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {Object.entries(profile).map(([key, value]) => (
-              <div key={key} className="space-y-1">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">{key}</label>
-                <Input value={value} onChange={(e) => handleProfileChange(key as keyof typeof defaultProfile, e.target.value)} />
+            {isLoadingProfile ? (
+              [...Array(4)].map((_, index) => <Skeleton key={index} className="h-14 w-full" />)
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <FitMeasurement label="Height" value={userProfile?.height} />
+                <FitMeasurement label="Weight" value={userProfile?.weight} />
+                <FitMeasurement label="Collar" value={userProfile?.collar} />
+                <FitMeasurement label="Waist" value={userProfile?.waist} />
               </div>
-            ))}
-            <Button variant="secondary" className="w-full">
-              Save profile
-            </Button>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -303,5 +294,14 @@ const Overview = () => {
     </div>
   );
 };
+
+const FitMeasurement = ({ label, value }: { label: string; value?: string | null }) => (
+  <div className="rounded-xl border border-border bg-muted/20 p-3">
+    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+      {label}
+    </p>
+    <p className="mt-1 text-sm font-semibold text-foreground">{value || "Not set"}</p>
+  </div>
+);
 
 export default Overview;

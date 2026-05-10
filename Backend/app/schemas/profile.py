@@ -19,6 +19,15 @@ class ProfileUpdate(BaseModel):
     fit_preference: str | None = None
     layering_preference: str | None = None
     accessories_preference: str | None = None
+    height: str | None = None
+    weight: str | None = None
+    collar: str | None = None
+    waist: str | None = None
+    inseam: str | None = None
+    shoe_size: str | None = None
+    chest: str | None = None
+    shoulder: str | None = None
+    sleeve_length: str | None = None
 
 
 class ProfileRead(BaseModel):
@@ -39,6 +48,15 @@ class ProfileRead(BaseModel):
     fit_preference: str | None = None
     layering_preference: str | None = None
     accessories_preference: str | None = None
+    height: str | None = None
+    weight: str | None = None
+    collar: str | None = None
+    waist: str | None = None
+    inseam: str | None = None
+    shoe_size: str | None = None
+    chest: str | None = None
+    shoulder: str | None = None
+    sleeve_length: str | None = None
     profile_completed: bool
     completed_at: datetime | None = None
     created_at: datetime | None = None
@@ -48,3 +66,4 @@ class ProfileRead(BaseModel):
 class ProfileCompletionStatus(BaseModel):
     profile_completed: bool
     missing_fields: list[str] = Field(default_factory=list)
+    completion_percentage: int = 0

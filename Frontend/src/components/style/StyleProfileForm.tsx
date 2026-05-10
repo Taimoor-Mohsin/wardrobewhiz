@@ -15,8 +15,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { profileApi } from "@/lib/api/profile";
 import { cn } from "@/lib/utils";
 import { profileKeys, useProfile } from "@/hooks/useProfile";
-import type { ProfileUpdatePayload, UserProfile } from "@/types/profile";
+import type { ProfileCompletionStatus, ProfileUpdatePayload, UserProfile } from "@/types/profile";
 import { toast } from "sonner";
+
+export type StyleProfileSection = "questionnaire" | "preferences" | "measurements" | "review";
+type MeasurementFieldKey =
+  | "height"
+  | "weight"
+  | "collar"
+  | "waist"
+  | "inseam"
+  | "shoe_size"
+  | "chest"
+  | "shoulder"
+  | "sleeve_length";
 
 type StyleProfileDraft = {
   usual_contexts: string[];
@@ -33,10 +45,25 @@ type StyleProfileDraft = {
   fit_preference: string;
   layering_preference: string;
   accessories_preference: string;
+  height: string;
+  weight: string;
+  collar: string;
+  waist: string;
+  inseam: string;
+  shoe_size: string;
+  chest: string;
+  shoulder: string;
+  sleeve_length: string;
 };
 
 type StyleProfileFormProps = {
   mode?: "settings" | "onboarding";
+  sections?: StyleProfileSection[];
+  showHeader?: boolean;
+  showTabs?: boolean;
+  submitLabel?: string;
+  requireCompleteOnSave?: boolean;
+  onSaved?: (profile: UserProfile, completion: ProfileCompletionStatus) => void;
   onCompleted?: () => void;
 };
 
@@ -69,6 +96,13 @@ const easternWesternOptions = ["Eastern", "Western", "Both"];
 const layeringOptions = ["Avoid layers", "Light layers", "Like layers"];
 const accessoriesOptions = ["No accessories", "Minimal accessories", "Statement accessories"];
 
+const sectionLabels: Record<StyleProfileSection, string> = {
+  questionnaire: "Questionnaire",
+  preferences: "Preferences",
+  measurements: "Measurements & Fit",
+  review: "Review",
+};
+
 const missingLabels: Record<string, string> = {
   usual_contexts: "Select at least one usual dressing context.",
   usual_context_other: "Describe the other dressing context.",
@@ -99,7 +133,28 @@ const emptyDraft: StyleProfileDraft = {
   fit_preference: "",
   layering_preference: "",
   accessories_preference: "",
+  height: "",
+  weight: "",
+  collar: "",
+  waist: "",
+  inseam: "",
+  shoe_size: "",
+  chest: "",
+  shoulder: "",
+  sleeve_length: "",
 };
+
+const measurementFields: Array<{ key: MeasurementFieldKey; label: string; placeholder: string }> = [
+  { key: "height", label: "Height", placeholder: "E.g. 5'9 or 175 cm" },
+  { key: "weight", label: "Weight", placeholder: "E.g. 70 kg" },
+  { key: "collar", label: "Collar", placeholder: "E.g. 15.5 in" },
+  { key: "chest", label: "Chest", placeholder: "E.g. 40 in" },
+  { key: "shoulder", label: "Shoulder", placeholder: "E.g. 18 in" },
+  { key: "sleeve_length", label: "Sleeve length", placeholder: "E.g. 25 in" },
+  { key: "waist", label: "Waist", placeholder: "E.g. 32 in" },
+  { key: "inseam", label: "Inseam", placeholder: "E.g. 30 in" },
+  { key: "shoe_size", label: "Shoe size", placeholder: "E.g. 42 EU / 9 US" },
+];
 
 const profileToDraft = (profile?: UserProfile): StyleProfileDraft => {
   if (!profile) {
@@ -121,6 +176,15 @@ const profileToDraft = (profile?: UserProfile): StyleProfileDraft => {
     fit_preference: profile.fit_preference || "",
     layering_preference: profile.layering_preference || "",
     accessories_preference: profile.accessories_preference || "",
+    height: profile.height || "",
+    weight: profile.weight || "",
+    collar: profile.collar || "",
+    waist: profile.waist || "",
+    inseam: profile.inseam || "",
+    shoe_size: profile.shoe_size || "",
+    chest: profile.chest || "",
+    shoulder: profile.shoulder || "",
+    sleeve_length: profile.sleeve_length || "",
   };
 };
 
@@ -145,26 +209,46 @@ const getMissingFields = (draft: StyleProfileDraft) => {
   return missing;
 };
 
+const cleanText = (value: string) => value.trim() || null;
+
 const draftToPayload = (draft: StyleProfileDraft): ProfileUpdatePayload => ({
   usual_contexts: draft.usual_contexts,
-  usual_context_other: draft.usual_context_other.trim() || null,
-  style_text: draft.style_text.trim() || null,
+  usual_context_other: cleanText(draft.usual_context_other),
+  style_text: cleanText(draft.style_text),
   formality_level: draft.formality_level,
   comfort_style_level: draft.comfort_style_level,
   modesty_preference: draft.modesty_preference || null,
   eastern_western_preference: draft.eastern_western_preference || null,
-  clothing_avoid_text: draft.clothing_avoid_text.trim() || null,
+  clothing_avoid_text: cleanText(draft.clothing_avoid_text),
   preferred_colors: draft.preferred_colors,
   disliked_colors: draft.disliked_colors,
   preferred_styles: draft.preferred_styles,
   fit_preference: draft.fit_preference || null,
   layering_preference: draft.layering_preference || null,
   accessories_preference: draft.accessories_preference || null,
+  height: cleanText(draft.height),
+  weight: cleanText(draft.weight),
+  collar: cleanText(draft.collar),
+  waist: cleanText(draft.waist),
+  inseam: cleanText(draft.inseam),
+  shoe_size: cleanText(draft.shoe_size),
+  chest: cleanText(draft.chest),
+  shoulder: cleanText(draft.shoulder),
+  sleeve_length: cleanText(draft.sleeve_length),
 });
 
-export const StyleProfileForm = ({ mode = "settings", onCompleted }: StyleProfileFormProps) => {
+export const StyleProfileForm = ({
+  mode = "settings",
+  sections = ["questionnaire", "preferences", "measurements", "review"],
+  showHeader = true,
+  showTabs,
+  submitLabel,
+  requireCompleteOnSave = true,
+  onSaved,
+  onCompleted,
+}: StyleProfileFormProps) => {
   const queryClient = useQueryClient();
-  const { profile, isLoading, isUpdating, updateProfile } = useProfile();
+  const { profile, completion, isLoading, isUpdating, updateProfile } = useProfile();
   const [draft, setDraft] = useState<StyleProfileDraft>(emptyDraft);
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [preferredColor, setPreferredColor] = useState("#1F2937");
@@ -175,9 +259,12 @@ export const StyleProfileForm = ({ mode = "settings", onCompleted }: StyleProfil
   }, [profile]);
 
   const completionPercent = useMemo(() => {
+    if (completion?.completion_percentage !== undefined) {
+      return completion.completion_percentage;
+    }
     const total = Object.keys(missingLabels).length;
     return Math.round(((total - getMissingFields(draft).length) / total) * 100);
-  }, [draft]);
+  }, [completion?.completion_percentage, draft]);
 
   const updateDraft = <Key extends keyof StyleProfileDraft>(
     key: Key,
@@ -212,21 +299,29 @@ export const StyleProfileForm = ({ mode = "settings", onCompleted }: StyleProfil
 
   const handleSave = async () => {
     const updatedProfile = await updateProfile(draftToPayload(draft));
-    const completion = await profileApi.getCompletionStatus();
-    queryClient.setQueryData(profileKeys.completion(), completion);
+    const nextCompletion = await profileApi.getCompletionStatus();
+    queryClient.setQueryData(profileKeys.completion(), nextCompletion);
 
     if (updatedProfile.profile_completed) {
       setMissingFields([]);
       toast.success(mode === "onboarding" ? "Profile completed" : "Style profile saved");
+      onSaved?.(updatedProfile, nextCompletion);
       onCompleted?.();
       return;
     }
 
-    const missing = completion.missing_fields.length
-      ? completion.missing_fields
+    const missing = nextCompletion.missing_fields.length
+      ? nextCompletion.missing_fields
       : getMissingFields(draft);
     setMissingFields(missing);
-    toast.error("Complete the highlighted profile details before continuing.");
+
+    if (requireCompleteOnSave) {
+      toast.error("Complete the highlighted profile details before continuing.");
+      return;
+    }
+
+    toast.success("Progress saved");
+    onSaved?.(updatedProfile, nextCompletion);
   };
 
   if (isLoading) {
@@ -239,27 +334,20 @@ export const StyleProfileForm = ({ mode = "settings", onCompleted }: StyleProfil
     );
   }
 
+  const useTabs = showTabs ?? sections.length > 1;
+
   return (
     <Card className="shadow-card">
-      <CardHeader>
-        <CardTitle>Style Profiling</CardTitle>
-        <CardDescription>
-          Complete these details so WardrobeWiz can personalize wardrobe and outfit recommendations.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="rounded-md border border-border bg-muted/30 p-4">
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-sm font-medium text-foreground">Profile completion</p>
-            <p className="text-sm text-muted-foreground">{completionPercent}%</p>
-          </div>
-          <div className="mt-3 h-2 rounded-full bg-background">
-            <div
-              className="h-2 rounded-full bg-primary transition-all"
-              style={{ width: `${completionPercent}%` }}
-            />
-          </div>
-        </div>
+      {showHeader && (
+        <CardHeader>
+          <CardTitle>Style Profile</CardTitle>
+          <CardDescription>
+            Keep your lifestyle, preferences, measurements, and fit details in one place.
+          </CardDescription>
+        </CardHeader>
+      )}
+      <CardContent className={cn("space-y-6", !showHeader && "pt-6")}>
+        <CompletionSummary completionPercent={completionPercent} />
 
         {missingFields.length > 0 && (
           <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4">
@@ -272,148 +360,316 @@ export const StyleProfileForm = ({ mode = "settings", onCompleted }: StyleProfil
           </div>
         )}
 
-        <Tabs defaultValue="questionnaire" className="w-full">
-          <TabsList>
-            <TabsTrigger value="questionnaire">Questionnaire</TabsTrigger>
-            <TabsTrigger value="preferences">Preferences</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="questionnaire" className="space-y-6 pt-4">
-            <div className="space-y-3">
-              <Label>What do you usually dress for?</Label>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {usualContextOptions.map((option) => (
-                  <label
-                    key={option}
-                    className="flex cursor-pointer items-center gap-3 rounded-md border border-border p-3 text-sm hover:bg-muted/60"
-                  >
-                    <Checkbox
-                      checked={draft.usual_contexts.includes(option)}
-                      onCheckedChange={() => toggleArrayValue("usual_contexts", option)}
-                    />
-                    {option}
-                  </label>
-                ))}
-              </div>
-              {draft.usual_contexts.includes("Other") && (
-                <Input
-                  placeholder="Tell us what else you dress for"
-                  value={draft.usual_context_other}
-                  onChange={(event) => updateDraft("usual_context_other", event.target.value)}
+        {useTabs ? (
+          <Tabs defaultValue={sections[0]} className="w-full">
+            <TabsList className="flex h-auto flex-wrap justify-start">
+              {sections.map((section) => (
+                <TabsTrigger key={section} value={section}>
+                  {sectionLabels[section]}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            {sections.map((section) => (
+              <TabsContent key={section} value={section} className="space-y-6 pt-4">
+                <SectionContent
+                  section={section}
+                  draft={draft}
+                  updateDraft={updateDraft}
+                  toggleArrayValue={toggleArrayValue}
+                  preferredColor={preferredColor}
+                  setPreferredColor={setPreferredColor}
+                  dislikedColor={dislikedColor}
+                  setDislikedColor={setDislikedColor}
+                  addColor={addColor}
+                  removeColor={removeColor}
                 />
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="style_text">How would you describe your everyday style?</Label>
-              <Textarea
-                id="style_text"
-                placeholder="E.g. relaxed smart casual, clean colors, comfortable shoes"
-                value={draft.style_text}
-                onChange={(event) => updateDraft("style_text", event.target.value)}
+              </TabsContent>
+            ))}
+          </Tabs>
+        ) : (
+          <div className="space-y-6">
+            {sections.map((section) => (
+              <SectionContent
+                key={section}
+                section={section}
+                draft={draft}
+                updateDraft={updateDraft}
+                toggleArrayValue={toggleArrayValue}
+                preferredColor={preferredColor}
+                setPreferredColor={setPreferredColor}
+                dislikedColor={dislikedColor}
+                setDislikedColor={setDislikedColor}
+                addColor={addColor}
+                removeColor={removeColor}
               />
-            </div>
-
-            <ScaleField
-              label="How formal do you usually prefer your outfits?"
-              leftLabel="Very casual"
-              rightLabel="Very formal"
-              value={draft.formality_level}
-              onChange={(value) => updateDraft("formality_level", value)}
-            />
-
-            <ScaleField
-              label="Comfort vs style?"
-              leftLabel="Comfort first"
-              rightLabel="Style first"
-              value={draft.comfort_style_level}
-              onChange={(value) => updateDraft("comfort_style_level", value)}
-            />
-
-            <ChoiceGroup
-              label="How modest do you prefer your outfits?"
-              options={modestyOptions}
-              value={draft.modesty_preference}
-              onChange={(value) => updateDraft("modesty_preference", value)}
-            />
-
-            <ChoiceGroup
-              label="Do you prefer Eastern, Western, or both?"
-              options={easternWesternOptions}
-              value={draft.eastern_western_preference}
-              onChange={(value) => updateDraft("eastern_western_preference", value)}
-            />
-
-            <div className="space-y-2">
-              <Label htmlFor="clothing_avoid_text">Any clothing you avoid?</Label>
-              <Textarea
-                id="clothing_avoid_text"
-                placeholder="E.g. avoid wool in daytime, tight collars, neon colors"
-                value={draft.clothing_avoid_text}
-                onChange={(event) => updateDraft("clothing_avoid_text", event.target.value)}
-              />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="preferences" className="space-y-6 pt-4">
-            <ColorField
-              label="Preferred colors"
-              colors={draft.preferred_colors}
-              pickerColor={preferredColor}
-              onPickerColorChange={setPreferredColor}
-              onAdd={() => addColor("preferred_colors", preferredColor)}
-              onRemove={(color) => removeColor("preferred_colors", color)}
-            />
-
-            <ColorField
-              label="Disliked colors"
-              colors={draft.disliked_colors}
-              pickerColor={dislikedColor}
-              onPickerColorChange={setDislikedColor}
-              onAdd={() => addColor("disliked_colors", dislikedColor)}
-              onRemove={(color) => removeColor("disliked_colors", color)}
-            />
-
-            <CardGrid
-              label="Style aesthetics"
-              options={aestheticOptions}
-              selectedValues={draft.preferred_styles}
-              multi
-              onToggle={(value) => toggleArrayValue("preferred_styles", value)}
-            />
-
-            <CardGrid
-              label="Fit preference"
-              options={fitOptions}
-              selectedValues={draft.fit_preference ? [draft.fit_preference] : []}
-              onToggle={(value) => updateDraft("fit_preference", value)}
-            />
-
-            <ChoiceGroup
-              label="Layering preference"
-              options={layeringOptions}
-              value={draft.layering_preference}
-              onChange={(value) => updateDraft("layering_preference", value)}
-            />
-
-            <ChoiceGroup
-              label="Accessories preference"
-              options={accessoriesOptions}
-              value={draft.accessories_preference}
-              onChange={(value) => updateDraft("accessories_preference", value)}
-            />
-          </TabsContent>
-        </Tabs>
+            ))}
+          </div>
+        )}
 
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={isUpdating}>
-            {isUpdating ? "Saving..." : mode === "onboarding" ? "Save & Continue" : "Save Profile"}
+            {isUpdating
+              ? "Saving..."
+              : submitLabel || (mode === "onboarding" ? "Save & Continue" : "Save Profile")}
           </Button>
         </div>
       </CardContent>
     </Card>
   );
 };
+
+const CompletionSummary = ({ completionPercent }: { completionPercent: number }) => (
+  <div className="rounded-md border border-border bg-muted/30 p-4">
+    <div className="flex items-center justify-between gap-4">
+      <p className="text-sm font-medium text-foreground">Profile completion</p>
+      <p className="text-sm text-muted-foreground">{completionPercent}%</p>
+    </div>
+    <div className="mt-3 h-2 rounded-full bg-background">
+      <div
+        className="h-2 rounded-full bg-primary transition-all"
+        style={{ width: `${completionPercent}%` }}
+      />
+    </div>
+  </div>
+);
+
+const SectionContent = ({
+  section,
+  draft,
+  updateDraft,
+  toggleArrayValue,
+  preferredColor,
+  setPreferredColor,
+  dislikedColor,
+  setDislikedColor,
+  addColor,
+  removeColor,
+}: {
+  section: StyleProfileSection;
+  draft: StyleProfileDraft;
+  updateDraft: <Key extends keyof StyleProfileDraft>(
+    key: Key,
+    value: StyleProfileDraft[Key],
+  ) => void;
+  toggleArrayValue: (key: "usual_contexts" | "preferred_styles", value: string) => void;
+  preferredColor: string;
+  setPreferredColor: (color: string) => void;
+  dislikedColor: string;
+  setDislikedColor: (color: string) => void;
+  addColor: (key: "preferred_colors" | "disliked_colors", color: string) => void;
+  removeColor: (key: "preferred_colors" | "disliked_colors", color: string) => void;
+}) => {
+  if (section === "questionnaire") {
+    return (
+      <>
+        <div className="space-y-3">
+          <Label>What do you usually dress for?</Label>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {usualContextOptions.map((option) => (
+              <label
+                key={option}
+                className="flex cursor-pointer items-center gap-3 rounded-md border border-border p-3 text-sm hover:bg-muted/60"
+              >
+                <Checkbox
+                  checked={draft.usual_contexts.includes(option)}
+                  onCheckedChange={() => toggleArrayValue("usual_contexts", option)}
+                />
+                {option}
+              </label>
+            ))}
+          </div>
+          {draft.usual_contexts.includes("Other") && (
+            <Input
+              placeholder="Tell us what else you dress for"
+              value={draft.usual_context_other}
+              onChange={(event) => updateDraft("usual_context_other", event.target.value)}
+            />
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="style_text">How would you describe your everyday style?</Label>
+          <Textarea
+            id="style_text"
+            placeholder="E.g. relaxed smart casual, clean colors, comfortable shoes"
+            value={draft.style_text}
+            onChange={(event) => updateDraft("style_text", event.target.value)}
+          />
+        </div>
+
+        <ScaleField
+          label="How formal do you usually prefer your outfits?"
+          leftLabel="Very casual"
+          rightLabel="Very formal"
+          value={draft.formality_level}
+          onChange={(value) => updateDraft("formality_level", value)}
+        />
+
+        <ScaleField
+          label="Comfort vs style?"
+          leftLabel="Comfort first"
+          rightLabel="Style first"
+          value={draft.comfort_style_level}
+          onChange={(value) => updateDraft("comfort_style_level", value)}
+        />
+
+        <ChoiceGroup
+          label="How modest do you prefer your outfits?"
+          options={modestyOptions}
+          value={draft.modesty_preference}
+          onChange={(value) => updateDraft("modesty_preference", value)}
+        />
+
+        <ChoiceGroup
+          label="Do you prefer Eastern, Western, or both?"
+          options={easternWesternOptions}
+          value={draft.eastern_western_preference}
+          onChange={(value) => updateDraft("eastern_western_preference", value)}
+        />
+
+        <div className="space-y-2">
+          <Label htmlFor="clothing_avoid_text">Any clothing you avoid?</Label>
+          <Textarea
+            id="clothing_avoid_text"
+            placeholder="E.g. avoid wool in daytime, tight collars, neon colors"
+            value={draft.clothing_avoid_text}
+            onChange={(event) => updateDraft("clothing_avoid_text", event.target.value)}
+          />
+        </div>
+      </>
+    );
+  }
+
+  if (section === "preferences") {
+    return (
+      <>
+        <ColorField
+          label="Preferred colors"
+          colors={draft.preferred_colors}
+          pickerColor={preferredColor}
+          onPickerColorChange={setPreferredColor}
+          onAdd={() => addColor("preferred_colors", preferredColor)}
+          onRemove={(color) => removeColor("preferred_colors", color)}
+        />
+
+        <ColorField
+          label="Disliked colors"
+          colors={draft.disliked_colors}
+          pickerColor={dislikedColor}
+          onPickerColorChange={setDislikedColor}
+          onAdd={() => addColor("disliked_colors", dislikedColor)}
+          onRemove={(color) => removeColor("disliked_colors", color)}
+        />
+
+        <CardGrid
+          label="Style aesthetics"
+          options={aestheticOptions}
+          selectedValues={draft.preferred_styles}
+          multi
+          onToggle={(value) => toggleArrayValue("preferred_styles", value)}
+        />
+
+        <ChoiceGroup
+          label="Layering preference"
+          options={layeringOptions}
+          value={draft.layering_preference}
+          onChange={(value) => updateDraft("layering_preference", value)}
+        />
+
+        <ChoiceGroup
+          label="Accessories preference"
+          options={accessoriesOptions}
+          value={draft.accessories_preference}
+          onChange={(value) => updateDraft("accessories_preference", value)}
+        />
+      </>
+    );
+  }
+
+  if (section === "measurements") {
+    return (
+      <>
+        <CardGrid
+          label="Fit preference"
+          options={fitOptions}
+          selectedValues={draft.fit_preference ? [draft.fit_preference] : []}
+          onToggle={(value) => updateDraft("fit_preference", value)}
+        />
+
+        <div className="space-y-3">
+          <div>
+            <Label>Measurements</Label>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Optional for profile completion, useful for future fit-aware recommendations.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {measurementFields.map((field) => (
+              <div key={field.key} className="space-y-2">
+                <Label htmlFor={field.key}>{field.label}</Label>
+                <Input
+                  id={field.key}
+                  placeholder={field.placeholder}
+                  value={String(draft[field.key] || "")}
+                  onChange={(event) => updateDraft(field.key, event.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return <ReviewSection draft={draft} />;
+};
+
+const ReviewSection = ({ draft }: { draft: StyleProfileDraft }) => (
+  <div className="grid gap-4 lg:grid-cols-2">
+    <ReviewGroup
+      title="Lifestyle"
+      items={[
+        ["Dresses for", draft.usual_contexts.join(", ")],
+        ["Other context", draft.usual_context_other],
+        ["Everyday style", draft.style_text],
+        ["Formality", draft.formality_level ? `${draft.formality_level}/5` : ""],
+        ["Comfort vs style", draft.comfort_style_level ? `${draft.comfort_style_level}/5` : ""],
+        ["Modesty", draft.modesty_preference],
+        ["Eastern/Western", draft.eastern_western_preference],
+        ["Avoids", draft.clothing_avoid_text],
+      ]}
+    />
+    <ReviewGroup
+      title="Preferences"
+      items={[
+        ["Preferred colors", draft.preferred_colors.join(", ")],
+        ["Disliked colors", draft.disliked_colors.join(", ")],
+        ["Aesthetics", draft.preferred_styles.join(", ")],
+        ["Fit", draft.fit_preference],
+        ["Layering", draft.layering_preference],
+        ["Accessories", draft.accessories_preference],
+      ]}
+    />
+    <ReviewGroup
+      title="Measurements"
+      items={measurementFields.map((field) => [field.label, String(draft[field.key] || "")])}
+    />
+  </div>
+);
+
+const ReviewGroup = ({ title, items }: { title: string; items: string[][] }) => (
+  <div className="rounded-md border border-border p-4">
+    <h3 className="font-medium text-foreground">{title}</h3>
+    <div className="mt-4 space-y-3">
+      {items.map(([label, value]) => (
+        <div key={label}>
+          <p className="text-xs uppercase text-muted-foreground">{label}</p>
+          <p className="mt-1 text-sm font-medium text-foreground">{value || "Not set"}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 const ScaleField = ({
   label,

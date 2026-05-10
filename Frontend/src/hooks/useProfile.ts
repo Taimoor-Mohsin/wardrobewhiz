@@ -31,6 +31,9 @@ export const useProfile = () => {
       queryClient.setQueryData(profileKeys.completion(), {
         profile_completed: profile.profile_completed,
         missing_fields: profile.profile_completed ? [] : previousCompletion?.missing_fields ?? [],
+        completion_percentage: profile.profile_completed
+          ? 100
+          : previousCompletion?.completion_percentage ?? 0,
       });
       void queryClient.invalidateQueries({ queryKey: profileKeys.all });
     },

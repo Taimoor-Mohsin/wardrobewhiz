@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { HexColorPicker } from "react-colorful";
 import { Check, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -62,6 +61,7 @@ type StyleProfileFormProps = {
   showHeader?: boolean;
   showTabs?: boolean;
   submitLabel?: string;
+  footerStart?: ReactNode;
   requireCompleteOnSave?: boolean;
   onSaved?: (profile: UserProfile, completion: ProfileCompletionStatus) => void;
   onCompleted?: () => void;
@@ -95,6 +95,89 @@ const modestyOptions = ["Relaxed", "Balanced", "Modest"];
 const easternWesternOptions = ["Eastern", "Western", "Both"];
 const layeringOptions = ["Avoid layers", "Light layers", "Like layers"];
 const accessoriesOptions = ["No accessories", "Minimal accessories", "Statement accessories"];
+
+const optionVisuals: Record<string, { description: string; gradient: string }> = {
+  Minimalist: {
+    description: "Clean lines, quiet tones",
+    gradient: "linear-gradient(135deg, #F8FAFC 0%, #CBD5E1 100%)",
+  },
+  Classic: {
+    description: "Timeless and composed",
+    gradient: "linear-gradient(135deg, #F5F0E8 0%, #475569 100%)",
+  },
+  Casual: {
+    description: "Relaxed everyday ease",
+    gradient: "linear-gradient(135deg, #DBEAFE 0%, #FDE68A 100%)",
+  },
+  Formal: {
+    description: "Sharp, polished, elevated",
+    gradient: "linear-gradient(135deg, #111827 0%, #64748B 100%)",
+  },
+  Streetwear: {
+    description: "Graphic, bold, layered",
+    gradient: "linear-gradient(135deg, #18181B 0%, #EF4444 55%, #FACC15 100%)",
+  },
+  Modern: {
+    description: "Crisp and current",
+    gradient: "linear-gradient(135deg, #0F172A 0%, #22D3EE 100%)",
+  },
+  Vintage: {
+    description: "Retro texture and warmth",
+    gradient: "linear-gradient(135deg, #7C2D12 0%, #FCD34D 100%)",
+  },
+  Bohemian: {
+    description: "Soft, artistic, earthy",
+    gradient: "linear-gradient(135deg, #A7F3D0 0%, #C084FC 100%)",
+  },
+  "Eastern/Traditional": {
+    description: "Heritage shapes and detail",
+    gradient: "linear-gradient(135deg, #7F1D1D 0%, #F59E0B 100%)",
+  },
+  "Smart Casual": {
+    description: "Neat but comfortable",
+    gradient: "linear-gradient(135deg, #1E3A8A 0%, #D9F99D 100%)",
+  },
+  Slim: {
+    description: "Close and tailored",
+    gradient: "linear-gradient(90deg, #E0F2FE 0%, #0284C7 100%)",
+  },
+  Regular: {
+    description: "Balanced everyday fit",
+    gradient: "linear-gradient(90deg, #DCFCE7 0%, #16A34A 100%)",
+  },
+  Loose: {
+    description: "Easy and relaxed",
+    gradient: "linear-gradient(90deg, #FEF3C7 0%, #F97316 100%)",
+  },
+  Oversized: {
+    description: "Roomy statement fit",
+    gradient: "linear-gradient(90deg, #EDE9FE 0%, #7C3AED 100%)",
+  },
+  "Avoid layers": {
+    description: "Keep outfits light",
+    gradient: "linear-gradient(135deg, #F8FAFC 0%, #60A5FA 100%)",
+  },
+  "Light layers": {
+    description: "One easy outer layer",
+    gradient: "linear-gradient(135deg, #ECFCCB 0%, #38BDF8 100%)",
+  },
+  "Like layers": {
+    description: "Texture and dimension",
+    gradient: "linear-gradient(135deg, #78350F 0%, #FBBF24 100%)",
+  },
+  "No accessories": {
+    description: "Simple and clean",
+    gradient: "linear-gradient(135deg, #F1F5F9 0%, #94A3B8 100%)",
+  },
+  "Minimal accessories": {
+    description: "Subtle finishing touches",
+    gradient: "linear-gradient(135deg, #FAE8FF 0%, #A855F7 100%)",
+  },
+  "Statement accessories": {
+    description: "Strong focal pieces",
+    gradient: "linear-gradient(135deg, #FEF2F2 0%, #DC2626 55%, #F59E0B 100%)",
+  },
+};
 
 const sectionLabels: Record<StyleProfileSection, string> = {
   questionnaire: "Questionnaire",
@@ -243,6 +326,7 @@ export const StyleProfileForm = ({
   showHeader = true,
   showTabs,
   submitLabel,
+  footerStart,
   requireCompleteOnSave = true,
   onSaved,
   onCompleted,
@@ -382,6 +466,7 @@ export const StyleProfileForm = ({
                   setDislikedColor={setDislikedColor}
                   addColor={addColor}
                   removeColor={removeColor}
+                  completionPercent={completionPercent}
                 />
               </TabsContent>
             ))}
@@ -401,12 +486,14 @@ export const StyleProfileForm = ({
                 setDislikedColor={setDislikedColor}
                 addColor={addColor}
                 removeColor={removeColor}
+                completionPercent={completionPercent}
               />
             ))}
           </div>
         )}
 
-        <div className="flex justify-end">
+        <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>{footerStart}</div>
           <Button onClick={handleSave} disabled={isUpdating}>
             {isUpdating
               ? "Saving..."
@@ -444,6 +531,7 @@ const SectionContent = ({
   setDislikedColor,
   addColor,
   removeColor,
+  completionPercent,
 }: {
   section: StyleProfileSection;
   draft: StyleProfileDraft;
@@ -458,6 +546,7 @@ const SectionContent = ({
   setDislikedColor: (color: string) => void;
   addColor: (key: "preferred_colors" | "disliked_colors", color: string) => void;
   removeColor: (key: "preferred_colors" | "disliked_colors", color: string) => void;
+  completionPercent: number;
 }) => {
   if (section === "questionnaire") {
     return (
@@ -569,18 +658,18 @@ const SectionContent = ({
           onToggle={(value) => toggleArrayValue("preferred_styles", value)}
         />
 
-        <ChoiceGroup
+        <CardGrid
           label="Layering preference"
           options={layeringOptions}
-          value={draft.layering_preference}
-          onChange={(value) => updateDraft("layering_preference", value)}
+          selectedValues={draft.layering_preference ? [draft.layering_preference] : []}
+          onToggle={(value) => updateDraft("layering_preference", value)}
         />
 
-        <ChoiceGroup
+        <CardGrid
           label="Accessories preference"
           options={accessoriesOptions}
-          value={draft.accessories_preference}
-          onChange={(value) => updateDraft("accessories_preference", value)}
+          selectedValues={draft.accessories_preference ? [draft.accessories_preference] : []}
+          onToggle={(value) => updateDraft("accessories_preference", value)}
         />
       </>
     );
@@ -621,11 +710,36 @@ const SectionContent = ({
     );
   }
 
-  return <ReviewSection draft={draft} />;
+  return <ReviewSection draft={draft} completionPercent={completionPercent} />;
 };
 
-const ReviewSection = ({ draft }: { draft: StyleProfileDraft }) => (
-  <div className="grid gap-4 lg:grid-cols-2">
+const ReviewSection = ({
+  draft,
+  completionPercent,
+}: {
+  draft: StyleProfileDraft;
+  completionPercent: number;
+}) => (
+  <div className="space-y-4">
+    <div className="rounded-md border border-border bg-muted/20 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="font-medium text-foreground">Profile completion</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Complete required style details before entering the main dashboard.
+          </p>
+        </div>
+        <p className="text-3xl font-semibold text-foreground">{completionPercent}%</p>
+      </div>
+      <div className="mt-4 h-2 rounded-full bg-background">
+        <div
+          className="h-2 rounded-full bg-primary transition-all"
+          style={{ width: `${completionPercent}%` }}
+        />
+      </div>
+    </div>
+
+    <div className="grid gap-4 lg:grid-cols-2">
     <ReviewGroup
       title="Lifestyle"
       items={[
@@ -654,6 +768,7 @@ const ReviewSection = ({ draft }: { draft: StyleProfileDraft }) => (
       title="Measurements"
       items={measurementFields.map((field) => [field.label, String(draft[field.key] || "")])}
     />
+    </div>
   </div>
 );
 
@@ -744,32 +859,66 @@ const ColorField = ({
   onAdd: () => void;
   onRemove: (color: string) => void;
 }) => (
-  <div className="space-y-3">
-    <Label>{label}</Label>
-    <div className="flex flex-wrap gap-2">
-      {colors.map((color) => (
-        <Badge key={color} variant="secondary" className="gap-2">
-          <span className="h-3 w-3 rounded-full border" style={{ backgroundColor: color }} />
-          {color}
-          <button type="button" onClick={() => onRemove(color)} aria-label={`Remove ${color}`}>
-            <X className="h-3 w-3" />
-          </button>
-        </Badge>
-      ))}
+  <div className="space-y-3 rounded-md border border-border bg-muted/10 p-4">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <Label>{label}</Label>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Add colors with the picker, then remove any that no longer fit.
+        </p>
+      </div>
       <Popover>
         <PopoverTrigger asChild>
-          <Button type="button" variant="outline" size="sm">
+          <Button type="button" variant="outline">
             Add color
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto space-y-3 p-3">
           <HexColorPicker color={pickerColor} onChange={onPickerColorChange} />
-          <Button type="button" size="sm" className="w-full" onClick={onAdd}>
+          <div className="flex items-center gap-2">
+            <span
+              className="h-9 w-9 rounded-md border border-border"
+              style={{ backgroundColor: pickerColor }}
+            />
+            <Input
+              value={pickerColor}
+              onChange={(event) => onPickerColorChange(event.target.value)}
+              className="font-mono text-sm"
+            />
+          </div>
+          <Button type="button" className="w-full" onClick={onAdd}>
             Add {pickerColor}
           </Button>
         </PopoverContent>
       </Popover>
     </div>
+
+    {colors.length ? (
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {colors.map((color) => (
+        <div key={color} className="overflow-hidden rounded-md border border-border bg-background">
+          <div className="h-16 border-b border-border" style={{ backgroundColor: color }} />
+          <div className="flex items-center justify-between gap-2 p-3">
+            <span className="font-mono text-sm font-medium text-foreground">{color}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => onRemove(color)}
+              aria-label={`Remove ${color}`}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      ))}
+      </div>
+    ) : (
+      <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+        No colors selected yet.
+      </div>
+    )}
   </div>
 );
 
@@ -788,31 +937,48 @@ const CardGrid = ({
 }) => (
   <div className="space-y-3">
     <Label>{label}</Label>
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
       {options.map((option) => {
         const selected = selectedValues.includes(option);
+        const visual = optionVisuals[option] || {
+          description: multi ? "Tap to toggle" : "Tap to select",
+          gradient: "linear-gradient(135deg, #F8FAFC 0%, #CBD5E1 100%)",
+        };
         return (
           <button
             key={option}
             type="button"
             className={cn(
-              "min-h-28 rounded-md border border-border bg-background p-3 text-left transition hover:border-primary/50",
-              selected && "border-primary bg-primary/10",
+              "group overflow-hidden rounded-md border border-border bg-background text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md",
+              selected && "border-primary bg-primary/5 ring-2 ring-primary/20",
             )}
             onClick={() => onToggle(option)}
           >
-            <div className="mb-3 flex h-12 items-center justify-center rounded-md bg-muted text-sm font-semibold text-muted-foreground">
-              {option
-                .split(/[ /]/)
-                .map((part) => part.charAt(0))
-                .join("")
-                .slice(0, 3)}
+            <div
+              className="relative h-24 border-b border-border"
+              style={{ backgroundImage: visual.gradient }}
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.55),transparent_42%)]" />
+              <div className="absolute bottom-3 left-3 rounded-md bg-background/80 px-2 py-1 text-xs font-semibold text-foreground shadow-sm backdrop-blur">
+                {option
+                  .split(/[ /]/)
+                  .map((part) => part.charAt(0))
+                  .join("")
+                  .slice(0, 3)}
+              </div>
+              {selected && (
+                <div className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                  <Check className="h-4 w-4" />
+                </div>
+              )}
             </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-foreground">{option}</span>
-              {selected && <Check className="h-4 w-4 text-primary" />}
+            <div className="space-y-1 p-3">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-sm font-semibold text-foreground">{option}</span>
+              </div>
+              <p className="text-xs leading-5 text-muted-foreground">{visual.description}</p>
+              {multi && <p className="text-xs font-medium text-primary">Tap to toggle</p>}
             </div>
-            {multi && <p className="mt-1 text-xs text-muted-foreground">Tap to toggle</p>}
           </button>
         );
       })}

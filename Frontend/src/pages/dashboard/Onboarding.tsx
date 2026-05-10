@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StyleProfileForm, type StyleProfileSection } from "@/components/style/StyleProfileForm";
 import { useAuth } from "@/hooks/use-auth";
+import { cn } from "@/lib/utils";
 
 const onboardingSteps: Array<{
   title: string;
@@ -49,11 +51,14 @@ const Onboarding = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 rounded-md border border-border bg-background p-5 shadow-card sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-foreground">Complete your style profile</h1>
-          <p className="mt-2 max-w-2xl text-muted-foreground">
+          <p className="text-sm font-medium text-primary">WardrobeWiz onboarding</p>
+          <h1 className="mt-1 text-3xl font-semibold text-foreground">
+            Build your personal style profile
+          </h1>
+          <p className="mt-2 max-w-3xl text-muted-foreground">
             WardrobeWiz needs a few style preferences before it can personalize your wardrobe,
             recommendations, and outfit explanations.
           </p>
@@ -64,12 +69,15 @@ const Onboarding = () => {
       </div>
 
       <Card className="shadow-card">
-        <CardContent className="space-y-4 pt-6">
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-sm font-medium text-foreground">
-              Step {currentStepIndex + 1} of {onboardingSteps.length}
-            </p>
-            <p className="text-sm text-muted-foreground">{progress}%</p>
+        <CardContent className="space-y-5 pt-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-primary">
+                Step {currentStepIndex + 1} of {onboardingSteps.length}
+              </p>
+              <h2 className="text-2xl font-semibold text-foreground">{currentStep.title}</h2>
+            </div>
+            <p className="text-sm font-medium text-muted-foreground">{progress}% complete</p>
           </div>
           <div className="h-2 rounded-full bg-muted">
             <div
@@ -77,29 +85,50 @@ const Onboarding = () => {
               style={{ width: `${progress}%` }}
             />
           </div>
-          <div className="grid gap-2 sm:grid-cols-4">
+          <div className="grid gap-3 lg:grid-cols-4">
             {onboardingSteps.map((step, index) => (
               <button
                 key={step.section}
                 type="button"
-                className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                className={cn(
+                  "rounded-md border p-3 text-left transition hover:border-primary/60 hover:bg-muted/50",
                   index === currentStepIndex
                     ? "border-primary bg-primary/10 text-foreground"
-                    : "border-border text-muted-foreground hover:bg-muted/60"
-                }`}
+                    : "border-border text-muted-foreground",
+                )}
                 onClick={() => setCurrentStepIndex(index)}
               >
-                {step.title}
+                <div className="flex items-center gap-3">
+                  <span
+                    className={cn(
+                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-semibold",
+                      index < currentStepIndex
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : index === currentStepIndex
+                          ? "border-primary text-primary"
+                          : "border-border",
+                    )}
+                  >
+                    {index < currentStepIndex ? <Check className="h-4 w-4" /> : index + 1}
+                  </span>
+                  <span className="text-sm font-semibold">{step.title}</span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {step.description}
+                </p>
               </button>
             ))}
           </div>
         </CardContent>
       </Card>
 
-      <div>
-        <div className="mb-4">
-          <h2 className="text-xl font-semibold text-foreground">{currentStep.title}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{currentStep.description}</p>
+      <div className="space-y-4">
+        <div>
+          <p className="text-sm font-medium text-primary">Current section</p>
+          <h2 className="mt-1 text-2xl font-semibold text-foreground">{currentStep.title}</h2>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            {currentStep.description}
+          </p>
         </div>
 
         <StyleProfileForm
@@ -109,6 +138,16 @@ const Onboarding = () => {
           showTabs={false}
           submitLabel={isLastStep ? "Complete Profile" : "Save & Next"}
           requireCompleteOnSave={isLastStep}
+          footerStart={
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCurrentStepIndex((step) => Math.max(step - 1, 0))}
+              disabled={currentStepIndex === 0}
+            >
+              Back
+            </Button>
+          }
           onSaved={(profile) => {
             if (profile.profile_completed) {
               navigate("/dashboard");
@@ -120,16 +159,6 @@ const Onboarding = () => {
           }}
           onCompleted={() => navigate("/dashboard")}
         />
-      </div>
-
-      <div className="flex justify-between">
-        <Button
-          variant="outline"
-          onClick={() => setCurrentStepIndex((step) => Math.max(step - 1, 0))}
-          disabled={currentStepIndex === 0}
-        >
-          Back
-        </Button>
       </div>
     </div>
   );

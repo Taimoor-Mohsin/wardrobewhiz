@@ -1,4 +1,6 @@
 from app.api.routes.wardrobe import (
+    BatchUploadInput,
+    create_batch_items_for_user,
     create_item_for_user,
     item_to_read,
     metadata_from_json,
@@ -27,6 +29,8 @@ def upload_image(
         current_user.id,
         metadata_from_json(metadata),
         image_path,
+        run_vision=True,
+        filename_hint=file.filename,
     )
     return item_to_read(item)
 
@@ -39,16 +43,26 @@ async def upload_batch(
     db: Session = Depends(get_db),
 ):
     form = await request.form()
-    items: list[WardrobeItemRead] = []
+    uploads: list[BatchUploadInput] = []
     errors: list[str] = []
 
     for index, file in enumerate(files):
         try:
             metadata = metadata_from_json(form.get(f"metadata_{index}"))
             image_path = save_upload_file(file)
-            item = create_item_for_user(db, current_user.id, metadata, image_path)
-            items.append(item_to_read(item))
+            uploads.append(
+                BatchUploadInput(
+                    index=index,
+                    filename=file.filename,
+                    payload=metadata,
+                    image_path=image_path,
+                )
+            )
         except Exception as exc:  # pragma: no cover - defensive batch isolation
             errors.append(f"{file.filename or f'file {index + 1}'}: {exc}")
 
-    return WardrobeUploadResponse(items=items, errors=errors)
+    batch_response = await create_batch_items_for_user(db, current_user.id, uploads)
+    return WardrobeUploadResponse(
+        items=batch_response.items,
+        errors=[*errors, *batch_response.errors],
+    )

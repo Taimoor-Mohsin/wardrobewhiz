@@ -12,27 +12,49 @@ export type Season = "Spring" | "Summer" | "Fall" | "Winter" | "All-Season";
 export type GarmentType = 
   | "Shirt" 
   | "T-Shirt" 
+  | "Polo Shirt"
   | "Hoodie"
   | "Pants" 
+  | "Trousers"
   | "Jeans" 
   | "Shorts" 
+  | "Skirt"
   | "Dress" 
   | "Jacket" 
   | "Coat" 
+  | "Blazer"
   | "Sweater" 
   | "Shoes" 
   | "Boots" 
   | "Sneakers" 
+  | "Loafers"
+  | "Sandals"
+  | "Formal Shoes"
+  | "Kurta"
+  | "Shalwar Kameez"
+  | "Saree"
+  | "Waistcoat"
   | "Hat" 
   | "Bag" 
   | "Jewelry" 
   | "Other";
 
+export interface DominantColor {
+  label: string;
+  hex: string;
+  percentage: number;
+  role: "primary" | "secondary" | "accent" | string;
+  confidence?: number;
+  source?: string;
+}
+
 export interface WardrobeItem {
   id: string;
   userId: string;
   imageUrl: string;
+  image_path?: string;
   thumbnailUrl?: string;
+  thumbnail_path?: string;
   segmented_image_path?: string;
   segmentedImageUrl?: string;
   name: string;
@@ -42,6 +64,7 @@ export interface WardrobeItem {
   color: string; // Hex color code
   colorLabel?: string;
   swatchColorHex?: string;
+  dominant_colors?: DominantColor[];
   season: Season;
   description?: string;
   notes?: string;

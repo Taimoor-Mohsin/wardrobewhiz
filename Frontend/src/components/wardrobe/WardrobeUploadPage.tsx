@@ -340,6 +340,16 @@ export const WardrobeUploadPage = ({
                   <p className="text-xs text-muted-foreground">
                     Current AI color: {activeReviewItem.colorLabel || activeReviewItem.color}
                   </p>
+                  {activeReviewItem.dominant_colors && activeReviewItem.dominant_colors.length > 1 && (
+                    <p className="text-xs text-muted-foreground">
+                      Secondary colors: {activeReviewItem.dominant_colors.slice(1).map((color) => color.label).join(", ")}
+                    </p>
+                  )}
+                  {activeReviewItem.tags && activeReviewItem.tags.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Pattern: {activeReviewItem.tags.join(", ")}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     Current AI season: {activeReviewItem.season}
                   </p>

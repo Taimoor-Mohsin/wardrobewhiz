@@ -46,6 +46,7 @@ class WardrobeItemRead(BaseModel):
     description: str | None = None
     notes: str | None = None
     tags: list[str] = Field(default_factory=list)
+    dominant_colors: list[dict] = Field(default_factory=list)
     image_path: str
     imageUrl: str
     thumbnail_path: str | None = None

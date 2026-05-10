@@ -1,3 +1,6 @@
+import logging
+from pathlib import Path
+
 from app.api.routes import auth, health, profile, upload, wardrobe
 from app.core.config import settings
 from app.core.database import Base, engine
@@ -6,12 +9,18 @@ from app.models import profile as profile_model, user, wardrobe_item  # noqa: F4
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 Base.metadata.create_all(bind=engine)
 apply_sqlite_dev_migrations(engine)
 
 app = FastAPI(title="WardrobeWhiz API")
+logger.info(
+    "LLM config: groq_key_present=%s gemini_key_present=%s",
+    bool(settings.groq_api_key),
+    bool(settings.gemini_api_key),
+)
 
 app.add_middleware(
     CORSMiddleware,

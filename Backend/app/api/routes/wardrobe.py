@@ -1,5 +1,9 @@
+import asyncio
 import json
+import logging
 import shutil
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -16,10 +20,20 @@ from app.schemas.wardrobe import (
     WardrobeStats,
     WardrobeUploadResponse,
 )
+from app.services.garment_classifier_service import classify_garment, detect_patterns
+from app.services.groq_vision_service import (
+    analyze_garment_groq,
+    extract_hex_pillow,
+    map_llm_metadata_to_wardrobe_fields,
+    normalize_llm_taxonomy,
+)
+from app.services.vision_service import analyze_wardrobe_image, infer_season
+from app.services.wardrobe_taxonomy import generate_item_name
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 CONTENT_TYPE_EXTENSIONS = {
     "image/jpeg": ".jpg",
@@ -27,6 +41,28 @@ CONTENT_TYPE_EXTENSIONS = {
     "image/png": ".png",
     "image/webp": ".webp",
 }
+
+DEFAULT_CATEGORY_VALUES = {"", "tops"}
+DEFAULT_TYPE_VALUES = {"", "shirt"}
+DEFAULT_NAME_VALUES = {"", "shirt", "wardrobe item", "new item", "untitled"}
+DEFAULT_COLOR_VALUES = {"", "#000000", "black"}
+DEFAULT_SEASON_VALUES = {"", "all-season", "all season"}
+GROQ_CONFIDENCE_THRESHOLD = 0.6
+GROQ_BATCH_CONCURRENCY = 3
+
+
+@dataclass
+class BatchUploadInput:
+    index: int
+    filename: str | None
+    payload: WardrobeItemCreate
+    image_path: str
+
+
+@dataclass
+class VisionAnalysisStatus:
+    groq_analyzed: bool = False
+    used_fallback: bool = False
 
 
 def encode_list(values: list[str] | None) -> str:
@@ -45,6 +81,43 @@ def decode_list(raw_value: str | None) -> list[str]:
     return [str(item) for item in value]
 
 
+def decode_dict_list(raw_value: str | None) -> list[dict]:
+    if not raw_value:
+        return []
+    try:
+        value = json.loads(raw_value)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def normalized(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def is_default_value(value: str | None, defaults: set[str]) -> bool:
+    return normalized(value) in defaults
+
+
+def color_label_for_name(color: str | None) -> str | None:
+    value = (color or "").strip()
+    if not value or value.startswith("#"):
+        return None
+    return value
+
+
+def run_groq_analysis_sync(image_path: str) -> dict:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(analyze_garment_groq(image_path))
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        return executor.submit(lambda: asyncio.run(analyze_garment_groq(image_path))).result()
+
+
 def public_path(path: str | None) -> str | None:
     if not path:
         return None
@@ -60,7 +133,8 @@ def public_path(path: str | None) -> str | None:
 
 
 def item_type(item: WardrobeItem) -> str:
-    return item.subcategory or "Other"
+    taxonomy = normalize_llm_taxonomy(item.category, item.subcategory, item.subcategory)
+    return taxonomy["type"] or item.subcategory or "Other"
 
 
 def item_to_read(item: WardrobeItem) -> WardrobeItemRead:
@@ -79,6 +153,7 @@ def item_to_read(item: WardrobeItem) -> WardrobeItemRead:
         description=item.description,
         notes=item.notes,
         tags=decode_list(item.pattern_tags_json),
+        dominant_colors=decode_dict_list(item.dominant_colors_json),
         image_path=item.image_path,
         imageUrl=image_url,
         thumbnail_path=item.thumbnail_path,
@@ -128,8 +203,245 @@ def apply_item_payload(item: WardrobeItem, payload: WardrobeItemCreate | Wardrob
             setattr(item, field_name, update_data[field_name])
 
 
-def create_item_for_user(
-    db: Session,
+def apply_mapped_vision_fields(
+    item: WardrobeItem,
+    mapped_fields: dict,
+    force_category: bool = False,
+    force_pattern: bool = False,
+) -> None:
+    dominant_colors = mapped_fields.get("dominant_colors")
+    if dominant_colors:
+        item.dominant_colors_json = mapped_fields.get("dominant_colors_json") or json.dumps(dominant_colors)
+
+    if is_default_value(item.color, DEFAULT_COLOR_VALUES):
+        item.color = mapped_fields.get("color") or item.color
+    if force_category or is_default_value(item.category, DEFAULT_CATEGORY_VALUES):
+        item.category = mapped_fields.get("category") or item.category
+    if force_category or is_default_value(item.subcategory, DEFAULT_TYPE_VALUES):
+        item.subcategory = (
+            mapped_fields.get("subcategory")
+            or mapped_fields.get("type")
+            or item.subcategory
+        )
+    if is_default_value(item.name, DEFAULT_NAME_VALUES):
+        item.name = mapped_fields.get("name") or item.name
+    if is_default_value(item.season, DEFAULT_SEASON_VALUES):
+        item.season = mapped_fields.get("season") or item.season
+    if not item.description and mapped_fields.get("description"):
+        item.description = mapped_fields["description"]
+
+    pattern_tags = mapped_fields.get("pattern_tags") or mapped_fields.get("tags") or []
+    if pattern_tags and (force_pattern or not decode_list(item.pattern_tags_json)):
+        item.pattern_tags_json = encode_list(pattern_tags)
+
+    occasion_tags = mapped_fields.get("occasion_tags") or []
+    if occasion_tags and not decode_list(item.occasion_tags_json):
+        item.occasion_tags_json = encode_list(occasion_tags)
+
+
+def apply_legacy_vision_fields(
+    item: WardrobeItem,
+    payload: WardrobeItemCreate,
+    classification_path: str,
+    vision_result,
+    filename_hint: str | None = None,
+    force_category: bool = False,
+    force_pattern: bool = False,
+    category_pattern_only: bool = False,
+) -> None:
+    if vision_result.dominant_color and not category_pattern_only:
+        item.dominant_colors_json = json.dumps(vision_result.dominant_colors)
+        if is_default_value(item.color, DEFAULT_COLOR_VALUES):
+            item.color = vision_result.dominant_color["label"]
+
+    classification = classify_garment(classification_path, filename_hint=filename_hint)
+    taxonomy_item = classification.taxonomy_item
+    logger.info(
+        "Classified wardrobe upload as %s using %s (confidence %.3f)",
+        classification.label,
+        classification.model,
+        classification.confidence,
+    )
+
+    if force_category or is_default_value(item.category, DEFAULT_CATEGORY_VALUES):
+        item.category = taxonomy_item.category
+    if force_category or is_default_value(item.subcategory, DEFAULT_TYPE_VALUES):
+        item.subcategory = taxonomy_item.subcategory
+
+    pattern_tags = detect_patterns(
+        classification_path,
+        filename_hint=filename_hint,
+        dominant_colors=vision_result.dominant_colors,
+    )
+    if pattern_tags and (force_pattern or not decode_list(item.pattern_tags_json)):
+        item.pattern_tags_json = encode_list(pattern_tags)
+
+    if category_pattern_only:
+        return
+
+    if is_default_value(item.name, DEFAULT_NAME_VALUES):
+        item.name = generate_item_name(
+            color_label_for_name(item.color),
+            taxonomy_item.type,
+            dominant_colors=vision_result.dominant_colors,
+            pattern_tags=pattern_tags,
+        )
+
+    if is_default_value(item.season, DEFAULT_SEASON_VALUES):
+        item.season = infer_season(
+            item.category,
+            taxonomy_item.type,
+            item.subcategory,
+            color_label_for_name(item.color),
+        )
+
+
+def apply_upload_vision(
+    item: WardrobeItem,
+    payload: WardrobeItemCreate,
+    filename_hint: str | None = None,
+) -> None:
+    original_category_was_default = is_default_value(item.category, DEFAULT_CATEGORY_VALUES)
+    original_type_was_default = is_default_value(item.subcategory, DEFAULT_TYPE_VALUES)
+    original_tags_were_empty = not decode_list(item.pattern_tags_json)
+
+    vision_result = analyze_wardrobe_image(
+        item.image_path,
+        category=item.category,
+        item_type=payload.type,
+        subcategory=item.subcategory,
+    )
+    if vision_result.segmented_image_path:
+        item.segmented_image_path = vision_result.segmented_image_path
+
+    analysis_path = item.segmented_image_path or item.image_path
+    try:
+        color_hex = extract_hex_pillow(analysis_path)
+    except Exception as exc:
+        logger.warning("Pillow color hex extraction failed for upload: %s", exc)
+        color_hex = (
+            str(vision_result.dominant_color.get("hex"))
+            if vision_result.dominant_color
+            else None
+        )
+
+    try:
+        groq_metadata = run_groq_analysis_sync(analysis_path)
+        mapped_fields = map_llm_metadata_to_wardrobe_fields(groq_metadata, color_hex)
+        confidence = float(mapped_fields.get("confidence", 0.0))
+        logger.info("Groq garment analysis confidence %.2f", confidence)
+
+        apply_mapped_vision_fields(item, mapped_fields)
+        if confidence < GROQ_CONFIDENCE_THRESHOLD:
+            logger.warning(
+                "Groq garment analysis confidence %.2f below %.2f; patching category/pattern with local fallback",
+                confidence,
+                GROQ_CONFIDENCE_THRESHOLD,
+            )
+            apply_legacy_vision_fields(
+                item,
+                payload,
+                analysis_path,
+                vision_result,
+                filename_hint=filename_hint,
+                force_category=original_category_was_default or original_type_was_default,
+                force_pattern=original_tags_were_empty,
+                category_pattern_only=True,
+            )
+    except Exception as exc:
+        logger.warning("Groq garment analysis failed; using local vision fallback: %s", exc)
+        apply_legacy_vision_fields(
+            item,
+            payload,
+            analysis_path,
+            vision_result,
+            filename_hint=filename_hint,
+        )
+
+
+async def apply_upload_vision_async(
+    item: WardrobeItem,
+    payload: WardrobeItemCreate,
+    filename_hint: str | None,
+    semaphore: asyncio.Semaphore,
+) -> VisionAnalysisStatus:
+    async with semaphore:
+        status = VisionAnalysisStatus()
+        original_category_was_default = is_default_value(item.category, DEFAULT_CATEGORY_VALUES)
+        original_type_was_default = is_default_value(item.subcategory, DEFAULT_TYPE_VALUES)
+        original_tags_were_empty = not decode_list(item.pattern_tags_json)
+
+        try:
+            vision_result = await asyncio.to_thread(
+                analyze_wardrobe_image,
+                item.image_path,
+                category=item.category,
+                item_type=payload.type,
+                subcategory=item.subcategory,
+            )
+        except Exception as exc:
+            status.used_fallback = True
+            logger.warning(
+                "Batch local image preprocessing failed; saving upload with provided metadata: %s",
+                exc,
+            )
+            return status
+        if vision_result.segmented_image_path:
+            item.segmented_image_path = vision_result.segmented_image_path
+
+        analysis_path = item.segmented_image_path or item.image_path
+        try:
+            color_hex = await asyncio.to_thread(extract_hex_pillow, analysis_path)
+        except Exception as exc:
+            logger.warning("Pillow color hex extraction failed for batch upload: %s", exc)
+            color_hex = (
+                str(vision_result.dominant_color.get("hex"))
+                if vision_result.dominant_color
+                else None
+            )
+
+        try:
+            groq_metadata = await analyze_garment_groq(analysis_path)
+            status.groq_analyzed = True
+            mapped_fields = map_llm_metadata_to_wardrobe_fields(groq_metadata, color_hex)
+            confidence = float(mapped_fields.get("confidence", 0.0))
+            logger.info("Groq garment batch analysis confidence %.2f", confidence)
+
+            apply_mapped_vision_fields(item, mapped_fields)
+            if confidence < GROQ_CONFIDENCE_THRESHOLD:
+                status.used_fallback = True
+                logger.warning(
+                    "Groq garment batch analysis confidence %.2f below %.2f; patching category/pattern with local fallback",
+                    confidence,
+                    GROQ_CONFIDENCE_THRESHOLD,
+                )
+                await asyncio.to_thread(
+                    apply_legacy_vision_fields,
+                    item,
+                    payload,
+                    analysis_path,
+                    vision_result,
+                    filename_hint=filename_hint,
+                    force_category=original_category_was_default or original_type_was_default,
+                    force_pattern=original_tags_were_empty,
+                    category_pattern_only=True,
+                )
+        except Exception as exc:
+            status.used_fallback = True
+            logger.warning("Groq garment batch analysis failed; using local vision fallback: %s", exc)
+            await asyncio.to_thread(
+                apply_legacy_vision_fields,
+                item,
+                payload,
+                analysis_path,
+                vision_result,
+                filename_hint=filename_hint,
+            )
+
+        return status
+
+
+def build_item_for_user(
     user_id: int,
     payload: WardrobeItemCreate,
     image_path: str | None = None,
@@ -141,11 +453,84 @@ def create_item_for_user(
     apply_item_payload(item, payload)
     if image_path:
         item.image_path = image_path
+    return item
 
+
+def persist_item(db: Session, item: WardrobeItem) -> WardrobeItem:
     db.add(item)
     db.commit()
     db.refresh(item)
     return item
+
+
+async def create_batch_items_for_user(
+    db: Session,
+    user_id: int,
+    uploads: list[BatchUploadInput],
+) -> WardrobeUploadResponse:
+    logger.info("Starting batch upload analysis for %d images", len(uploads))
+    semaphore = asyncio.Semaphore(GROQ_BATCH_CONCURRENCY)
+    prepared_items: list[tuple[BatchUploadInput, WardrobeItem]] = [
+        (upload, build_item_for_user(user_id, upload.payload, upload.image_path))
+        for upload in uploads
+    ]
+
+    analysis_results = await asyncio.gather(
+        *(
+            apply_upload_vision_async(item, upload.payload, upload.filename, semaphore)
+            for upload, item in prepared_items
+        ),
+        return_exceptions=True,
+    )
+
+    items: list[WardrobeItemRead] = []
+    errors: list[str] = []
+    groq_count = 0
+    fallback_count = 0
+
+    for (upload, item), result in zip(prepared_items, analysis_results, strict=False):
+        filename = upload.filename or f"file {upload.index + 1}"
+        if isinstance(result, Exception):
+            fallback_count += 1
+            logger.warning("Batch upload analysis failed for item %d: %s", upload.index, result)
+            errors.append(f"{filename}: {result}")
+            continue
+
+        if result.groq_analyzed:
+            groq_count += 1
+        if result.used_fallback:
+            fallback_count += 1
+
+        try:
+            persist_item(db, item)
+            items.append(item_to_read(item))
+        except Exception as exc:  # pragma: no cover - defensive DB isolation
+            db.rollback()
+            errors.append(f"{filename}: {exc}")
+
+    logger.info(
+        "Batch upload analysis complete: images=%d groq_analyzed=%d fallback=%d",
+        len(uploads),
+        groq_count,
+        fallback_count,
+    )
+    return WardrobeUploadResponse(items=items, errors=errors)
+
+
+def create_item_for_user(
+    db: Session,
+    user_id: int,
+    payload: WardrobeItemCreate,
+    image_path: str | None = None,
+    run_vision: bool = False,
+    filename_hint: str | None = None,
+) -> WardrobeItem:
+    item = build_item_for_user(user_id, payload, image_path)
+
+    if run_vision and item.image_path:
+        apply_upload_vision(item, payload, filename_hint=filename_hint)
+
+    return persist_item(db, item)
 
 
 def save_upload_file(file: UploadFile) -> str:
@@ -218,25 +603,35 @@ def create_wardrobe_item(
 
 
 @router.post("/upload", response_model=WardrobeUploadResponse)
-def upload_wardrobe_items(
+async def upload_wardrobe_items(
     files: list[UploadFile] = File(...),
     metadata: str | None = Form(default=None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    items: list[WardrobeItemRead] = []
+    uploads: list[BatchUploadInput] = []
     errors: list[str] = []
 
     for index, file in enumerate(files):
         try:
             file_metadata = metadata_from_json(metadata)
             image_path = save_upload_file(file)
-            item = create_item_for_user(db, current_user.id, file_metadata, image_path)
-            items.append(item_to_read(item))
+            uploads.append(
+                BatchUploadInput(
+                    index=index,
+                    filename=file.filename,
+                    payload=file_metadata,
+                    image_path=image_path,
+                )
+            )
         except Exception as exc:  # pragma: no cover - defensive batch isolation
             errors.append(f"{file.filename or f'file {index + 1}'}: {exc}")
 
-    return WardrobeUploadResponse(items=items, errors=errors)
+    batch_response = await create_batch_items_for_user(db, current_user.id, uploads)
+    return WardrobeUploadResponse(
+        items=batch_response.items,
+        errors=[*errors, *batch_response.errors],
+    )
 
 
 @router.get("/stats", response_model=WardrobeStats)

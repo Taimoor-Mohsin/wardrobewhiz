@@ -18,6 +18,11 @@ export const ImageUploadZone = ({
   className,
   disabled = false,
 }: ImageUploadZoneProps) => {
+  const acceptedExtensions = acceptedTypes.map((type) => {
+    const extension = type.replace("image/", "");
+    return extension.startsWith(".") ? extension : `.${extension}`;
+  });
+
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
       if (acceptedFiles.length > 0) {
@@ -30,7 +35,7 @@ export const ImageUploadZone = ({
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
     onDrop,
     accept: {
-      "image/*": acceptedTypes.map((type) => type.replace("image/", "")),
+      "image/*": acceptedExtensions,
     },
     maxFiles,
     disabled,

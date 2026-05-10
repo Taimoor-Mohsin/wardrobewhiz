@@ -7,6 +7,7 @@ const NEUTRAL_SWATCH_HEX = "#9CA3AF";
 
 const FASHION_COLOR_TO_HEX: Record<string, string> = {
   black: "#181818",
+  charcoal: "#3A3A3A",
   white: "#F5F5F5",
   grey: "#808080",
   gray: "#808080",
@@ -18,6 +19,8 @@ const FASHION_COLOR_TO_HEX: Record<string, string> = {
   maroon: "#742636",
   pink: "#D68AA2",
   green: "#4D7952",
+  "bright green": "#3FA34D",
+  "olive green": "#6F743F",
   olive: "#6F743F",
   mint: "#A6D1B4",
   yellow: "#E4C658",
@@ -26,22 +29,42 @@ const FASHION_COLOR_TO_HEX: Record<string, string> = {
   beige: "#D2BE9E",
   cream: "#F4ECDD",
   brown: "#6E4F3A",
+  "dark brown": "#3F2B1F",
   tan: "#B2916A",
   khaki: "#A39A6D",
   purple: "#805E90",
 };
 
-const buildSegmentedImageUrl = (segmentedImagePath?: string): string | undefined => {
-  if (!segmentedImagePath) {
+const resolveBackendUrl = (path?: string): string | undefined => {
+  if (!path) {
     return undefined;
   }
 
-  const filename = segmentedImagePath.split(/[/\\]/).pop();
+  if (/^https?:\/\//i.test(path) || path.startsWith("data:") || path.startsWith("blob:")) {
+    return path;
+  }
+
+  return `${STATIC_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+};
+
+const buildStaticImageUrl = (
+  imagePath?: string,
+  staticFolder: "uploads" | "segmented" | "thumbnails" = "uploads"
+): string | undefined => {
+  if (!imagePath) {
+    return undefined;
+  }
+
+  if (imagePath.startsWith("/static/") || /^https?:\/\//i.test(imagePath)) {
+    return resolveBackendUrl(imagePath);
+  }
+
+  const filename = imagePath.split(/[/\\]/).pop();
   if (!filename) {
     return undefined;
   }
 
-  return `${STATIC_BASE_URL}/static/segmented/${filename}`;
+  return `${STATIC_BASE_URL}/static/${staticFolder}/${filename}`;
 };
 
 const normalizeColorLabel = (value?: string): string | undefined => {
@@ -86,14 +109,26 @@ const formatColorLabel = (rawColor?: string): string | undefined => {
 
 export const normalizeWardrobeItem = (item: WardrobeItem): WardrobeItem => {
   const rawApiColor = item.color;
-  const swatchColorHex = getWardrobeSwatchHex(rawApiColor);
-  const colorLabel = formatColorLabel(rawApiColor);
+  const primaryDominantColor = item.dominant_colors?.[0];
+  const swatchColorHex = primaryDominantColor?.hex || getWardrobeSwatchHex(rawApiColor);
+  const colorLabel = primaryDominantColor?.label || formatColorLabel(rawApiColor);
+  const imageUrl =
+    buildStaticImageUrl(item.imageUrl, "uploads") ||
+    buildStaticImageUrl(item.image_path, "uploads") ||
+    item.imageUrl;
+  const thumbnailUrl =
+    buildStaticImageUrl(item.thumbnailUrl, "thumbnails") ||
+    buildStaticImageUrl(item.thumbnail_path, "thumbnails") ||
+    item.thumbnailUrl;
+  const segmentedImageUrl = buildStaticImageUrl(item.segmented_image_path, "segmented");
   const normalizedItem = {
     ...item,
+    imageUrl,
+    thumbnailUrl,
     color: swatchColorHex,
     colorLabel,
     swatchColorHex,
-    segmentedImageUrl: buildSegmentedImageUrl(item.segmented_image_path),
+    segmentedImageUrl,
   };
 
   console.log("[wardrobeApi] Normalized wardrobe item", {
@@ -132,7 +167,10 @@ export const wardrobeApi = {
         "Content-Type": "multipart/form-data",
       },
     });
-    return response.data;
+    return {
+      ...response.data,
+      items: (response.data?.items || []).map(normalizeWardrobeItem),
+    };
   },
 
   // Create wardrobe item

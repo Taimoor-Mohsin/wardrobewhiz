@@ -1,11 +1,12 @@
 # Python
-__pycache__/
+**__pycache__/
 *.pyc
 *.pyo
 *.pyd
 .venv/
 
 # Env
+Backend/.env
 .env
 
 # OS
@@ -13,6 +14,7 @@ __pycache__/
 Thumbs.db
 
 # Storage
+Backend/app/storage/
 backend/app/storage/uploads/*
 backend/app/storage/thumbnails/*
 backend/app/storage/faiss/*

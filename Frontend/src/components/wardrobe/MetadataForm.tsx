@@ -39,13 +39,13 @@ const categories: GarmentCategory[] = [
 ];
 
 const types: Record<GarmentCategory, GarmentType[]> = {
-  Tops: ["Shirt", "T-Shirt", "Sweater", "Hoodie", "Other"],
-  Bottoms: ["Pants", "Jeans", "Shorts", "Other"],
-  Footwear: ["Shoes", "Boots", "Sneakers", "Other"],
+  Tops: ["Shirt", "T-Shirt", "Polo Shirt", "Sweater", "Hoodie", "Kurta", "Other"],
+  Bottoms: ["Pants", "Trousers", "Jeans", "Shorts", "Skirt", "Other"],
+  Footwear: ["Shoes", "Boots", "Sneakers", "Loafers", "Sandals", "Formal Shoes", "Other"],
   Accessories: ["Hat", "Bag", "Jewelry", "Other"],
-  Outerwear: ["Jacket", "Coat", "Other"],
-  Dresses: ["Dress", "Other"],
-  Other: ["Other"],
+  Outerwear: ["Jacket", "Coat", "Blazer", "Waistcoat", "Other"],
+  Dresses: ["Dress", "Saree", "Other"],
+  Other: ["Shalwar Kameez", "Other"],
 };
 
 const seasons: Season[] = ["Spring", "Summer", "Fall", "Winter", "All-Season"];
@@ -60,11 +60,17 @@ export const MetadataForm = ({
   const [showColorPopover, setShowColorPopover] = useState(false);
 
   const handleChange = (field: keyof WardrobeItemMetadata, value: string | string[]) => {
+    const nextType =
+      field === "category"
+        ? types[value as GarmentCategory]?.includes(metadata.type)
+          ? metadata.type
+          : types[value as GarmentCategory]?.[0] || "Other"
+        : metadata.type;
+
     const nextMetadata = {
       ...metadata,
       [field]: value,
-      // Reset type when category changes
-      ...(field === "category" && { type: types[value as GarmentCategory]?.[0] || "Other" }),
+      ...(field === "category" && { type: nextType }),
     };
 
     console.log("[MetadataForm] Input change", {

@@ -2,11 +2,11 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { OutfitContext } from "@/types/outfit";
+import type { OutfitRecommendationRequest } from "@/types/outfit";
 
 interface ContextInputFormProps {
-  context: OutfitContext;
-  onChange: (context: OutfitContext) => void;
+  context: OutfitRecommendationRequest;
+  onChange: (context: OutfitRecommendationRequest) => void;
   className?: string;
 }
 
@@ -15,7 +15,10 @@ export const ContextInputForm = ({
   onChange,
   className,
 }: ContextInputFormProps) => {
-  const handleChange = (field: keyof OutfitContext, value: string | number) => {
+  const handleChange = (
+    field: keyof OutfitRecommendationRequest,
+    value: string | number | null,
+  ) => {
     onChange({
       ...context,
       [field]: value,
@@ -33,12 +36,12 @@ export const ContextInputForm = ({
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="event">Event / Occasion</Label>
+            <Label htmlFor="occasion">Occasion</Label>
             <Input
-              id="event"
+              id="occasion"
               placeholder="e.g., Board meeting, Casual dinner"
-              value={context.event || ""}
-              onChange={(e) => handleChange("event", e.target.value)}
+              value={context.occasion}
+              onChange={(event) => handleChange("occasion", event.target.value)}
             />
           </div>
 
@@ -47,8 +50,8 @@ export const ContextInputForm = ({
             <Input
               id="location"
               placeholder="e.g., Karachi, Lahore, Office"
-              value={context.location || ""}
-              onChange={(e) => handleChange("location", e.target.value)}
+              value={context.location}
+              onChange={(event) => handleChange("location", event.target.value)}
             />
           </div>
 
@@ -57,19 +60,19 @@ export const ContextInputForm = ({
             <Input
               id="weather"
               placeholder="e.g., Sunny, Humid, Cold"
-              value={context.weather || ""}
-              onChange={(e) => handleChange("weather", e.target.value)}
+              value={context.weather}
+              onChange={(event) => handleChange("weather", event.target.value)}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="temperature">Temperature (°C)</Label>
+            <Label htmlFor="temperature">Temperature (C)</Label>
             <Input
               id="temperature"
               type="number"
               placeholder="e.g., 26"
-              value={context.temperature || ""}
-              onChange={(e) => handleChange("temperature", parseInt(e.target.value) || 0)}
+              value={context.temperature_c || ""}
+              onChange={(event) => handleChange("temperature_c", Number(event.target.value) || 0)}
             />
           </div>
 
@@ -78,8 +81,8 @@ export const ContextInputForm = ({
             <Input
               id="mood"
               placeholder="e.g., Professional, Casual, Playful"
-              value={context.mood || ""}
-              onChange={(e) => handleChange("mood", e.target.value)}
+              value={context.mood}
+              onChange={(event) => handleChange("mood", event.target.value)}
             />
           </div>
 
@@ -88,19 +91,19 @@ export const ContextInputForm = ({
             <Input
               id="dressCode"
               placeholder="e.g., Business casual, Smart casual"
-              value={context.dressCode || ""}
-              onChange={(e) => handleChange("dressCode", e.target.value)}
+              value={context.dress_code}
+              onChange={(event) => handleChange("dress_code", event.target.value)}
             />
           </div>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="occasion">Additional Notes</Label>
+          <Label htmlFor="notes">Additional Notes</Label>
           <Textarea
-            id="occasion"
+            id="notes"
             placeholder="Any additional context or preferences..."
-            value={context.occasion || ""}
-            onChange={(e) => handleChange("occasion", e.target.value)}
+            value={context.notes || ""}
+            onChange={(event) => handleChange("notes", event.target.value || null)}
             rows={3}
           />
         </div>
@@ -108,4 +111,3 @@ export const ContextInputForm = ({
     </Card>
   );
 };
-

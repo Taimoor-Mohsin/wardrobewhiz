@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 
-from app.api.routes import auth, health, profile, upload, wardrobe
+from app.api.routes import auth, health, outfits, profile, upload, wardrobe
 from app.core.config import settings
 from app.core.database import Base, engine
 from app.core.dev_migrations import apply_sqlite_dev_migrations
@@ -40,6 +40,7 @@ app.include_router(health.router, prefix="/api/health", tags=["Health"])
 app.include_router(profile.router, prefix="/api/profiles", tags=["Profiles"])
 app.include_router(wardrobe.router, prefix="/api/wardrobe", tags=["Wardrobe"])
 app.include_router(upload.router, prefix="/api/upload", tags=["Upload"])
+app.include_router(outfits.router, prefix="/api/outfit", tags=["Outfit"])
 
 Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
 Path(settings.thumbnail_dir).mkdir(parents=True, exist_ok=True)

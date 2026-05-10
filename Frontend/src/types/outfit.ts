@@ -44,6 +44,37 @@ export interface OutfitGenerationResponse {
   alternatives?: Outfit[]; // Alternative outfit suggestions
 }
 
+export interface OutfitRecommendationRequest {
+  occasion: string;
+  location: string;
+  weather: string;
+  temperature_c: number;
+  mood: string;
+  dress_code: string;
+  notes?: string | null;
+}
+
+export interface OutfitRecommendationItem {
+  id: number;
+  name: string;
+  category?: string | null;
+  image_url: string;
+  image_path?: string | null;
+  segmented_image_path?: string | null;
+  color?: string | null;
+  color_label?: string | null;
+  color_hex?: string | null;
+}
+
+export interface OutfitRecommendationResponse {
+  outfit_name: string;
+  outfit_description: string;
+  styling_tips: string[];
+  color_story: string;
+  why_it_fits_you: string;
+  items: OutfitRecommendationItem[];
+}
+
 export interface OutfitFeedback {
   outfitId: string;
   feedbackType: FeedbackType;

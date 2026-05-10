@@ -1,9 +1,12 @@
-from app.api.routes import auth, health, profile, wardrobe
+from app.api.routes import auth, health, profile, upload, wardrobe
+from app.core.config import settings
 from app.core.database import Base, engine
 from app.core.dev_migrations import apply_sqlite_dev_migrations
 from app.models import profile as profile_model, user, wardrobe_item  # noqa: F401
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 Base.metadata.create_all(bind=engine)
 apply_sqlite_dev_migrations(engine)
@@ -27,6 +30,19 @@ app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(health.router, prefix="/api/health", tags=["Health"])
 app.include_router(profile.router, prefix="/api/profiles", tags=["Profiles"])
 app.include_router(wardrobe.router, prefix="/api/wardrobe", tags=["Wardrobe"])
+app.include_router(upload.router, prefix="/api/upload", tags=["Upload"])
+
+Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
+Path(settings.thumbnail_dir).mkdir(parents=True, exist_ok=True)
+segmented_dir = Path(settings.upload_dir).parent / "segmented"
+segmented_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
+app.mount(
+    "/static/thumbnails",
+    StaticFiles(directory=settings.thumbnail_dir),
+    name="thumbnails",
+)
+app.mount("/static/segmented", StaticFiles(directory=segmented_dir), name="segmented")
 
 
 @app.get("/")

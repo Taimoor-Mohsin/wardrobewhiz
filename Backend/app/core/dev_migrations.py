@@ -34,22 +34,35 @@ USER_PROFILE_COLUMNS = {
     "updated_at": "DATETIME",
 }
 
+WARDROBE_ITEM_COLUMNS = {
+    "name": "VARCHAR",
+    "segmented_image_path": "VARCHAR",
+    "color": "VARCHAR",
+    "season": "VARCHAR",
+    "description": "TEXT",
+    "wear_count": "INTEGER NOT NULL DEFAULT 0",
+    "last_worn": "DATETIME",
+}
+
+
+def add_missing_columns(engine: Engine, table_name: str, columns: dict[str, str]) -> None:
+    inspector = inspect(engine)
+    if table_name not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns(table_name)}
+
+    with engine.begin() as connection:
+        for column_name, column_type in columns.items():
+            if column_name not in existing_columns:
+                connection.execute(
+                    text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+                )
+
 
 def apply_sqlite_dev_migrations(engine: Engine) -> None:
     if engine.dialect.name != "sqlite":
         return
 
-    inspector = inspect(engine)
-    if "user_profiles" not in inspector.get_table_names():
-        return
-
-    existing_columns = {
-        column["name"] for column in inspector.get_columns("user_profiles")
-    }
-
-    with engine.begin() as connection:
-        for column_name, column_type in USER_PROFILE_COLUMNS.items():
-            if column_name not in existing_columns:
-                connection.execute(
-                    text(f"ALTER TABLE user_profiles ADD COLUMN {column_name} {column_type}")
-                )
+    add_missing_columns(engine, "user_profiles", USER_PROFILE_COLUMNS)
+    add_missing_columns(engine, "wardrobe_items", WARDROBE_ITEM_COLUMNS)

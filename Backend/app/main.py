@@ -1,11 +1,11 @@
 import logging
 from pathlib import Path
 
-from app.api.routes import auth, health, outfits, profile, upload, wardrobe
+from app.api.routes import auth, feedback, health, outfits, profile, upload, wardrobe
 from app.core.config import settings
 from app.core.database import Base, engine
 from app.core.dev_migrations import apply_sqlite_dev_migrations
-from app.models import profile as profile_model, user, wardrobe_item  # noqa: F401
+from app.models import feedback as feedback_model, outfit as outfit_model, profile as profile_model, user, wardrobe_item  # noqa: F401
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -36,6 +36,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(feedback.router, prefix="/api/feedback", tags=["Feedback"])
 app.include_router(health.router, prefix="/api/health", tags=["Health"])
 app.include_router(profile.router, prefix="/api/profiles", tags=["Profiles"])
 app.include_router(wardrobe.router, prefix="/api/wardrobe", tags=["Wardrobe"])

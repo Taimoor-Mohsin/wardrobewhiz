@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload } from "lucide-react";
 import { WardrobeGrid } from "@/components/wardrobe/WardrobeGrid";
 import { WardrobeFilters } from "@/components/wardrobe/WardrobeFilters";
@@ -12,9 +13,10 @@ import type { WardrobeItem, WardrobeFilters as WardrobeFiltersType } from "@/typ
 const Wardrobe = () => {
   const navigate = useNavigate();
   const [filters, setFilters] = useState<WardrobeFiltersType>({});
+  const [sortBy, setSortBy] = useState<WardrobeFiltersType["sort_by"]>("newest");
   const [editingItem, setEditingItem] = useState<WardrobeItem | null>(null);
 
-  const { items, isLoading, deleteItem, markWorn } = useWardrobe(filters);
+  const { items, isLoading, deleteItem, markWorn } = useWardrobe({ ...filters, sort_by: sortBy });
 
   const closeEditDialog = () => {
     setEditingItem(null);
@@ -50,6 +52,20 @@ const Wardrobe = () => {
       </div>
 
       <WardrobeFilters filters={filters} onFiltersChange={setFilters} />
+
+      <div className="flex justify-end">
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v as WardrobeFiltersType["sort_by"])}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Newest</SelectItem>
+            <SelectItem value="most_worn">Most Worn</SelectItem>
+            <SelectItem value="least_worn">Least Worn</SelectItem>
+            <SelectItem value="last_worn">Last Worn</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <WardrobeGrid
         items={items}

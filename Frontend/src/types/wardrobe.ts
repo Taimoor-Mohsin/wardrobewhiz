@@ -107,6 +107,13 @@ export interface WardrobeFilters {
   season?: Season | "All";
   type?: GarmentType | "All";
   searchQuery?: string;
+  sort_by?: "newest" | "most_worn" | "least_worn" | "last_worn";
+}
+
+export interface WardrobeSuggestions {
+  underused_count: number;
+  most_underused_category: string | null;
+  message: string;
 }
 
 export interface WardrobeStats {
@@ -116,5 +123,8 @@ export interface WardrobeStats {
   mostWorn: WardrobeItem[];
   leastWorn: WardrobeItem[];
   rewearRate: number;
+  totalWears: number;
+  neverWorn: number;
+  recentlyWorn: WardrobeItem[];
 }
 

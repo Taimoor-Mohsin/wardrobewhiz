@@ -4,7 +4,7 @@ import logging
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -30,6 +30,7 @@ from app.services.groq_vision_service import (
 from app.services.vision_service import analyze_wardrobe_image, infer_season
 from app.services.wardrobe_taxonomy import generate_item_name
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 router = APIRouter()
@@ -566,6 +567,7 @@ def list_wardrobe_items(
     season: str | None = None,
     type: str | None = None,
     searchQuery: str | None = None,
+    sort_by: str = "newest",
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -587,7 +589,15 @@ def list_wardrobe_items(
             | (WardrobeItem.notes.ilike(like_value))
         )
 
-    items = query.order_by(WardrobeItem.created_at.desc()).all()
+    if sort_by == "most_worn":
+        items = query.order_by(WardrobeItem.wear_count.desc()).all()
+    elif sort_by == "least_worn":
+        items = query.order_by(WardrobeItem.wear_count.asc()).all()
+    elif sort_by == "last_worn":
+        items = query.order_by(WardrobeItem.last_worn.desc()).all()
+    else:
+        items = query.order_by(WardrobeItem.created_at.desc()).all()
+
     return [item_to_read(item) for item in items]
 
 
@@ -656,6 +666,12 @@ def get_wardrobe_stats(
 
     sorted_by_wear = sorted(items, key=lambda item: item.wear_count or 0, reverse=True)
     total_wears = sum(item.wear_count or 0 for item in items)
+    never_worn_count = sum(1 for item in items if not item.wear_count)
+    recently_worn = sorted(
+        [item for item in items if item.last_worn],
+        key=lambda i: i.last_worn,
+        reverse=True,
+    )[:5]
     return WardrobeStats(
         totalItems=len(items),
         itemsByCategory=by_category,
@@ -663,7 +679,72 @@ def get_wardrobe_stats(
         mostWorn=[item_to_read(item) for item in sorted_by_wear[:5]],
         leastWorn=[item_to_read(item) for item in sorted_by_wear[-5:]],
         rewearRate=(total_wears / len(items)) if items else 0,
+        totalWears=total_wears,
+        neverWorn=never_worn_count,
+        recentlyWorn=[item_to_read(item) for item in recently_worn],
     )
+
+
+@router.get("/unworn", response_model=list[WardrobeItemRead])
+def get_unworn_items(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    items = (
+        db.query(WardrobeItem)
+        .filter(
+            WardrobeItem.user_id == current_user.id,
+            or_(WardrobeItem.wear_count == 0, WardrobeItem.wear_count.is_(None)),
+        )
+        .order_by(WardrobeItem.created_at.desc())
+        .all()
+    )
+    return [item_to_read(item) for item in items]
+
+
+@router.get("/suggestions")
+def get_wardrobe_suggestions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    items = (
+        db.query(WardrobeItem)
+        .filter(WardrobeItem.user_id == current_user.id)
+        .all()
+    )
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+
+    def _naive(dt: datetime | None) -> datetime | None:
+        if dt is None:
+            return None
+        return dt.replace(tzinfo=None) if dt.tzinfo else dt
+
+    underused = [
+        item for item in items
+        if _naive(item.last_worn) is None or _naive(item.last_worn) < thirty_days_ago
+    ]
+
+    by_category: dict[str, list[int]] = {}
+    for item in items:
+        if item.category:
+            by_category.setdefault(item.category, []).append(item.wear_count or 0)
+
+    most_underused_category = (
+        min(by_category, key=lambda c: sum(by_category[c]) / len(by_category[c]))
+        if by_category
+        else None
+    )
+
+    n = len(underused)
+    message = (
+        f"You have {n} item{'s' if n != 1 else ''} you haven't worn in over a month"
+        " — let WardrobeWhiz rediscover them"
+    )
+    return {
+        "underused_count": n,
+        "most_underused_category": most_underused_category,
+        "message": message,
+    }
 
 
 @router.get("/{item_id}", response_model=WardrobeItemRead)

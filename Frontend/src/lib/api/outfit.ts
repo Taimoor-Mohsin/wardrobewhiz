@@ -6,8 +6,8 @@ import type {
   OutfitRecommendationRequest,
   OutfitRecommendationResponse,
   OutfitFeedback,
-  SavedOutfit,
-  OutfitLookbook,
+  SaveOutfitRequest,
+  SavedOutfitResponse,
 } from "@/types/outfit";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
@@ -42,7 +42,6 @@ const normalizeRecommendationResponse = (
 });
 
 export const outfitApi = {
-  // Generate outfit based on context
   generateOutfit: async (
     request: OutfitGenerationRequest
   ): Promise<OutfitGenerationResponse> => {
@@ -57,42 +56,40 @@ export const outfitApi = {
     return normalizeRecommendationResponse(response.data);
   },
 
-  // Get saved outfits
-  getSavedOutfits: async (filters?: {
-    favoritesOnly?: boolean;
-    tags?: string[];
-    dateRange?: { start: string; end: string };
-  }): Promise<OutfitLookbook> => {
-    const response = await apiClient.get("/outfit/saved", { params: filters });
+  surpriseMe: async (): Promise<OutfitRecommendationResponse> => {
+    const response = await apiClient.post("/outfit/recommend/surprise");
+    return normalizeRecommendationResponse(response.data);
+  },
+
+  saveOutfit: async (
+    outfit: OutfitRecommendationResponse,
+    occasion?: string | null
+  ): Promise<{ id: number; message: string }> => {
+    const body: SaveOutfitRequest = { ...outfit, occasion };
+    const response = await apiClient.post("/outfit/save", body);
     return response.data;
   },
 
-  // Get single outfit
+  getSavedOutfits: async (): Promise<SavedOutfitResponse[]> => {
+    const response = await apiClient.get("/outfit/saved");
+    return response.data;
+  },
+
+  deleteSavedOutfit: async (id: number): Promise<void> => {
+    await apiClient.delete(`/outfit/saved/${id}`);
+  },
+
   getOutfit: async (id: string): Promise<Outfit> => {
     const response = await apiClient.get(`/outfit/${id}`);
     return response.data;
   },
 
-  // Save outfit to favorites
-  saveOutfit: async (id: string): Promise<SavedOutfit> => {
-    const response = await apiClient.post(`/outfit/${id}/save`);
-    return response.data;
-  },
-
-  // Unsave outfit
-  unsaveOutfit: async (id: string): Promise<void> => {
-    await apiClient.delete(`/outfit/${id}/save`);
-  },
-
-  // Submit feedback
   submitFeedback: async (feedback: OutfitFeedback): Promise<void> => {
     await apiClient.post("/outfit/feedback", feedback);
   },
 
-  // Get outfit alternatives
   getAlternatives: async (outfitId: string): Promise<Outfit[]> => {
     const response = await apiClient.get(`/outfit/${outfitId}/alternatives`);
     return response.data;
   },
 };
-

@@ -69,6 +69,7 @@ export const useWardrobe = (filters?: WardrobeFilters) => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["wardrobe"] });
       queryClient.invalidateQueries({ queryKey: ["wardrobe", "stats"] });
+      toast.success("Marked as worn");
     },
     onError: (error) => {
       toast.error("Failed to mark item as worn");

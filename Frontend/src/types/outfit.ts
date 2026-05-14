@@ -46,12 +46,34 @@ export interface OutfitGenerationResponse {
 
 export interface OutfitRecommendationRequest {
   occasion: string;
-  location: string;
+  location?: string;
   weather: string;
   temperature_c: number;
   mood: string;
   dress_code: string;
   notes?: string | null;
+}
+
+export interface SaveOutfitRequest {
+  outfit_name: string;
+  outfit_description: string;
+  styling_tips: string[];
+  color_story: string;
+  why_it_fits_you: string;
+  items: OutfitRecommendationItem[];
+  occasion?: string | null;
+}
+
+export interface SavedOutfitResponse {
+  id: number;
+  outfit_name: string;
+  outfit_description: string;
+  styling_tips: string[];
+  color_story: string;
+  why_it_fits_you: string;
+  items: OutfitRecommendationItem[];
+  context_occasion?: string | null;
+  created_at: string;
 }
 
 export interface OutfitRecommendationItem {
@@ -73,6 +95,13 @@ export interface OutfitRecommendationResponse {
   color_story: string;
   why_it_fits_you: string;
   items: OutfitRecommendationItem[];
+  confidence_score?: number;
+  harmony_type?: string;
+}
+
+export interface OutfitFeedbackRequest {
+  outfit_id: number;
+  rating: 1 | -1;
 }
 
 export interface OutfitFeedback {

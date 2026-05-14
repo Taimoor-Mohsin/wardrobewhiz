@@ -72,3 +72,6 @@ class WardrobeStats(BaseModel):
     mostWorn: list[WardrobeItemRead]
     leastWorn: list[WardrobeItemRead]
     rewearRate: float
+    totalWears: int = 0
+    neverWorn: int = 0
+    recentlyWorn: list[WardrobeItemRead] = Field(default_factory=list)

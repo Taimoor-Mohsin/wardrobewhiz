@@ -1,5 +1,5 @@
 import apiClient from "./client";
-import type { WardrobeItem, WardrobeFilters, WardrobeStats, WardrobeItemMetadata } from "@/types/wardrobe";
+import type { WardrobeItem, WardrobeFilters, WardrobeStats, WardrobeItemMetadata, WardrobeSuggestions } from "@/types/wardrobe";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 const STATIC_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, "");
@@ -203,13 +203,33 @@ export const wardrobeApi = {
   // Get wardrobe statistics
   getWardrobeStats: async (): Promise<WardrobeStats> => {
     const response = await apiClient.get("/wardrobe/stats");
-    return response.data;
+    const data = response.data;
+    const normalizeList = (list: unknown[]) =>
+      list.map((item) => normalizeWardrobeItem(item as WardrobeItem));
+    return {
+      ...data,
+      mostWorn: normalizeList(data.mostWorn ?? []),
+      leastWorn: normalizeList(data.leastWorn ?? []),
+      recentlyWorn: normalizeList(data.recentlyWorn ?? []),
+    };
   },
 
   // Mark item as worn
   markItemWorn: async (id: string): Promise<WardrobeItem> => {
     const response = await apiClient.post(`/wardrobe/${id}/worn`);
     return normalizeWardrobeItem(response.data);
+  },
+
+  // Get items never worn
+  getUnwornItems: async (): Promise<WardrobeItem[]> => {
+    const response = await apiClient.get("/wardrobe/unworn");
+    return response.data.map(normalizeWardrobeItem);
+  },
+
+  // Get wardrobe suggestions (underused items stats)
+  getWardrobeSuggestions: async (): Promise<WardrobeSuggestions> => {
+    const response = await apiClient.get("/wardrobe/suggestions");
+    return response.data;
   },
 };
 

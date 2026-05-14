@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { AxiosError } from "axios";
-import { AlertCircle, Loader2, Sparkles } from "lucide-react";
+import { AlertCircle, Bookmark, BookmarkCheck, Loader2, Shuffle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ContextInputForm } from "@/components/outfit/ContextInputForm";
+import { OutfitFeedbackButtons } from "@/components/outfit/OutfitFeedbackButtons";
 import { OutfitRecommendationResult } from "@/components/outfit/OutfitRecommendationResult";
 import { outfitApi } from "@/lib/api/outfit";
 import type { OutfitRecommendationRequest } from "@/types/outfit";
@@ -14,7 +15,6 @@ import { toast } from "sonner";
 
 const initialContext: OutfitRecommendationRequest = {
   occasion: "",
-  location: "",
   weather: "",
   temperature_c: 26,
   mood: "",
@@ -24,9 +24,20 @@ const initialContext: OutfitRecommendationRequest = {
 
 const Recommend = () => {
   const [context, setContext] = useState<OutfitRecommendationRequest>(initialContext);
+  const [occasionError, setOccasionError] = useState("");
+  const [lastAction, setLastAction] = useState<"generate" | "surprise" | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
+  const [savedOutfitId, setSavedOutfitId] = useState<number | null>(null);
 
   const recommendationMutation = useMutation({
     mutationFn: (request: OutfitRecommendationRequest) => outfitApi.recommendOutfit(request),
+    onError: (error) => {
+      toast.error(getErrorMessage(error));
+    },
+  });
+
+  const surpriseMutation = useMutation({
+    mutationFn: () => outfitApi.surpriseMe(),
     onError: (error) => {
       toast.error(getErrorMessage(error));
     },
@@ -38,16 +49,60 @@ const Recommend = () => {
     ? getErrorMessage(recommendationMutation.error)
     : "";
 
+  const isSurprising = surpriseMutation.isPending;
+  const isAnyPending = isGenerating || isSurprising;
+
+  const displayRecommendation =
+    lastAction === "surprise" ? surpriseMutation.data : recommendation;
+  const displayError =
+    lastAction === "surprise"
+      ? surpriseMutation.error
+        ? getErrorMessage(surpriseMutation.error)
+        : ""
+      : errorMessage;
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      outfitApi.saveOutfit(displayRecommendation!, context.occasion || null),
+    onSuccess: (data: { id: number }) => {
+      setIsSaved(true);
+      setSavedOutfitId(data.id);
+      toast.success("Outfit saved to your lookbook!");
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const handleContextChange = (updated: OutfitRecommendationRequest) => {
+    setContext(updated);
+    if (updated.occasion.trim()) setOccasionError("");
+  };
+
   const handleGenerate = () => {
-    if (!context.occasion.trim() && !context.location.trim() && !context.weather.trim()) {
+    if (!context.occasion.trim()) {
+      setOccasionError("Occasion is required.");
+      return;
+    }
+    setOccasionError("");
+
+    if (!context.occasion.trim() && !context.location?.trim() && !context.weather.trim()) {
       toast.error("Please provide at least occasion, location, or weather information");
       return;
     }
 
+    setLastAction("generate");
+    setIsSaved(false);
+    setSavedOutfitId(null);
     recommendationMutation.mutate({
       ...context,
       notes: context.notes?.trim() || null,
     });
+  };
+
+  const handleSurprise = () => {
+    setLastAction("surprise");
+    setIsSaved(false);
+    setSavedOutfitId(null);
+    surpriseMutation.mutate();
   };
 
   return (
@@ -59,7 +114,7 @@ const Recommend = () => {
         </p>
       </div>
 
-      <ContextInputForm context={context} onChange={setContext} />
+      <ContextInputForm context={context} onChange={handleContextChange} occasionError={occasionError} />
 
       <Card>
         <CardHeader>
@@ -79,10 +134,10 @@ const Recommend = () => {
         </CardContent>
       </Card>
 
-      <div className="flex justify-center">
+      <div className="flex flex-col sm:flex-row gap-3 justify-center">
         <Button
           onClick={handleGenerate}
-          disabled={isGenerating}
+          disabled={isAnyPending}
           size="lg"
           className="w-full sm:w-auto"
         >
@@ -98,28 +153,52 @@ const Recommend = () => {
             </>
           )}
         </Button>
+
+        <Button
+          onClick={handleSurprise}
+          disabled={isAnyPending}
+          variant="outline"
+          size="lg"
+          className="w-full sm:w-auto"
+        >
+          {isSurprising ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Surprising...
+            </>
+          ) : (
+            <>
+              <Shuffle className="mr-2 h-4 w-4" />
+              Surprise Me
+            </>
+          )}
+        </Button>
       </div>
 
-      {errorMessage && (
+      {displayError && (
         <Card className="border-destructive/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-destructive">
               <AlertCircle className="h-5 w-5" />
               Recommendation failed
             </CardTitle>
-            <CardDescription>{errorMessage}</CardDescription>
+            <CardDescription>{displayError}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" onClick={handleGenerate} disabled={isGenerating}>
+            <Button
+              variant="outline"
+              onClick={lastAction === "surprise" ? handleSurprise : handleGenerate}
+              disabled={isAnyPending}
+            >
               Try again
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {isGenerating && <RecommendationSkeleton />}
+      {isAnyPending && <RecommendationSkeleton />}
 
-      {!recommendation && !errorMessage && !isGenerating && (
+      {!displayRecommendation && !displayError && !isAnyPending && (
         <EmptyState
           title="No recommendation yet"
           description="Fill in the context above to request an outfit recommendation from your wardrobe."
@@ -127,8 +206,37 @@ const Recommend = () => {
         />
       )}
 
-      {recommendation && !isGenerating && (
-        <OutfitRecommendationResult recommendation={recommendation} />
+      {displayRecommendation && !isAnyPending && (
+        <>
+          <OutfitRecommendationResult recommendation={displayRecommendation} />
+          <div className="flex flex-col items-center gap-4">
+            <Button
+              onClick={() => saveMutation.mutate()}
+              disabled={isSaved || saveMutation.isPending}
+              variant="outline"
+            >
+              {saveMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : isSaved ? (
+                <>
+                  <BookmarkCheck className="mr-2 h-4 w-4" />
+                  Saved
+                </>
+              ) : (
+                <>
+                  <Bookmark className="mr-2 h-4 w-4" />
+                  Save Outfit
+                </>
+              )}
+            </Button>
+            {savedOutfitId !== null && (
+              <OutfitFeedbackButtons outfitId={savedOutfitId} />
+            )}
+          </div>
+        </>
       )}
     </div>
   );

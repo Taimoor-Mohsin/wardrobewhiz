@@ -1,60 +1,61 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { Loader2, ThumbsDown, ThumbsUp } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { ThumbsUp, ThumbsDown, RefreshCw } from "lucide-react";
+import { feedbackApi } from "@/lib/api/feedback";
 import { cn } from "@/lib/utils";
-import type { FeedbackType } from "@/types/outfit";
 
 interface OutfitFeedbackButtonsProps {
-  outfitId: string;
-  currentFeedback?: FeedbackType;
-  onFeedback: (feedbackType: FeedbackType) => void;
-  onSwap?: () => void;
+  outfitId: number;
   className?: string;
 }
 
-export const OutfitFeedbackButtons = ({
-  outfitId,
-  currentFeedback,
-  onFeedback,
-  onSwap,
-  className,
-}: OutfitFeedbackButtonsProps) => {
-  const [selectedFeedback, setSelectedFeedback] = useState<FeedbackType | undefined>(currentFeedback);
+export const OutfitFeedbackButtons = ({ outfitId, className }: OutfitFeedbackButtonsProps) => {
+  const [selectedRating, setSelectedRating] = useState<1 | -1 | null>(null);
 
-  const handleFeedback = (feedbackType: FeedbackType) => {
-    setSelectedFeedback(feedbackType);
-    onFeedback(feedbackType);
+  const feedbackMutation = useMutation({
+    mutationFn: (rating: 1 | -1) => feedbackApi.submitFeedback({ outfit_id: outfitId, rating }),
+    onSuccess: () => toast.success("Feedback submitted"),
+    onError: () => toast.error("Failed to submit feedback"),
+  });
+
+  const isDisabled = feedbackMutation.isSuccess || feedbackMutation.isPending;
+
+  const handleRate = (rating: 1 | -1) => {
+    if (isDisabled) return;
+    setSelectedRating(rating);
+    feedbackMutation.mutate(rating);
   };
 
   return (
-    <div className={cn("flex gap-2 flex-wrap", className)}>
+    <div className={cn("flex gap-2", className)}>
       <Button
-        variant={selectedFeedback === "like" ? "default" : "outline"}
+        variant={selectedRating === 1 && feedbackMutation.isSuccess ? "default" : "outline"}
         size="sm"
-        onClick={() => handleFeedback("like")}
+        disabled={isDisabled}
+        onClick={() => handleRate(1)}
       >
-        <ThumbsUp className="h-4 w-4 mr-2" />
+        {feedbackMutation.isPending && selectedRating === 1 ? (
+          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+        ) : (
+          <ThumbsUp className="h-4 w-4 mr-2" />
+        )}
         Like
       </Button>
       <Button
-        variant={selectedFeedback === "dislike" ? "destructive" : "outline"}
+        variant={selectedRating === -1 && feedbackMutation.isSuccess ? "destructive" : "outline"}
         size="sm"
-        onClick={() => handleFeedback("dislike")}
+        disabled={isDisabled}
+        onClick={() => handleRate(-1)}
       >
-        <ThumbsDown className="h-4 w-4 mr-2" />
+        {feedbackMutation.isPending && selectedRating === -1 ? (
+          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+        ) : (
+          <ThumbsDown className="h-4 w-4 mr-2" />
+        )}
         Dislike
       </Button>
-      {onSwap && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onSwap}
-        >
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Swap Item
-        </Button>
-      )}
     </div>
   );
 };
-

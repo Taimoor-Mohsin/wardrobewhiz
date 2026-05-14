@@ -44,7 +44,13 @@ COLD_FRIENDLY_TYPES = {"hoodie", "sweater", "jacket", "coat", "boots"}
 RAIN_FRIENDLY_TYPES = {"jacket", "coat", "boots"}
 
 
-def retrieve_relevant_items(wardrobe: list, context: dict, profile: dict) -> list:
+def retrieve_relevant_items(
+    wardrobe: list,
+    context: dict,
+    profile: dict,
+    feedback_history: list | None = None,
+    recent_item_ids: list | None = None,
+) -> list:
     """Return the top wardrobe items for the later LLM recommendation step.
 
     Retrieval exists so the recommendation prompt is grounded in the user's
@@ -66,7 +72,13 @@ def retrieve_relevant_items(wardrobe: list, context: dict, profile: dict) -> lis
         if item_data["category"] not in CORE_CATEGORIES:
             continue
 
-        score, reasons = _score_item(item_data, context_data, profile_data)
+        score, reasons = _score_item(
+            item_data,
+            context_data,
+            profile_data,
+            feedback_history or [],
+            recent_item_ids or [],
+        )
         item_data["retrieval_score"] = round(score, 2)
         item_data["retrieval_reasons"] = reasons
         scored_items.append((score, input_index, item_data))
@@ -79,6 +91,8 @@ def _score_item(
     item: dict[str, Any],
     context: dict[str, Any],
     profile: dict[str, Any],
+    feedback_history: list[dict[str, Any]] | None = None,
+    recent_item_ids: list | None = None,
 ) -> tuple[float, list[str]]:
     score = 0.0
     reasons: list[str] = []
@@ -118,6 +132,21 @@ def _score_item(
     if weather_score:
         reasons.append(f"weather suitability {weather_score:+.1f}")
 
+    feedback_score = _score_feedback_history(item, feedback_history or [])
+    score += feedback_score
+    if feedback_score:
+        reasons.append(f"feedback history {feedback_score:+.1f}")
+
+    utilization_score = _score_utilization(item)
+    score += utilization_score
+    if utilization_score:
+        reasons.append(f"utilization {utilization_score:+.1f}")
+
+    diversity_score = _score_diversity(item, recent_item_ids or [])
+    score += diversity_score
+    if diversity_score:
+        reasons.append(f"diversity {diversity_score:+.1f}")
+
     return score, reasons
 
 
@@ -125,14 +154,18 @@ def _score_season(item: dict[str, Any], context: dict[str, Any]) -> float:
     seasons = {_normalize_token(value) for value in item["seasons"]}
     temp = _temperature(context)
     weather_text = _context_text(context, "weather")
+    has_weather_context = temp is not None or bool(weather_text)
     score = 0.0
 
-    if temp >= 28 or _contains_any(weather_text, {"hot", "sunny", "humid"}):
+    if not has_weather_context:
+        return score
+
+    if (temp is not None and temp >= 28) or _contains_any(weather_text, {"hot", "sunny", "humid"}):
         if "summer" in seasons:
             score += 3
         if "winter" in seasons:
             score -= 2
-    elif temp <= 15 or _contains_any(weather_text, {"cold", "chilly", "winter"}):
+    elif (temp is not None and temp <= 15) or _contains_any(weather_text, {"cold", "chilly", "winter"}):
         if "winter" in seasons:
             score += 3
         if "summer" in seasons:
@@ -267,9 +300,9 @@ def _score_layering(
     elif "avoid" in layering:
         score -= 3
 
-    if temp >= 28 or _contains_any(weather_text, {"hot", "humid"}):
+    if (temp is not None and temp >= 28) or _contains_any(weather_text, {"hot", "humid"}):
         score -= 3
-    elif temp <= 18 or _contains_any(weather_text, {"cold", "chilly", "rain"}):
+    elif (temp is not None and temp <= 18) or _contains_any(weather_text, {"cold", "chilly", "rain"}):
         score += 2
 
     return score
@@ -282,7 +315,7 @@ def _score_weather_suitability(item: dict[str, Any], context: dict[str, Any]) ->
     weather_text = _context_text(context, "weather")
     score = 0.0
 
-    if temp >= 30 or _contains_any(weather_text, {"hot", "humid"}):
+    if (temp is not None and temp >= 30) or _contains_any(weather_text, {"hot", "humid"}):
         if item_type in HOT_FRIENDLY_TYPES:
             score += 2
         if item_type in {"hoodie", "sweater", "coat"}:
@@ -290,7 +323,7 @@ def _score_weather_suitability(item: dict[str, Any], context: dict[str, Any]) ->
         elif category == "Outerwear":
             score -= 2
 
-    if temp <= 15 or _contains_any(weather_text, {"cold", "chilly"}):
+    if (temp is not None and temp <= 15) or _contains_any(weather_text, {"cold", "chilly"}):
         if item_type in COLD_FRIENDLY_TYPES or category == "Outerwear":
             score += 2
         if item_type in {"sandals", "shorts"}:
@@ -303,6 +336,39 @@ def _score_weather_suitability(item: dict[str, Any], context: dict[str, Any]) ->
             score -= 2
 
     return score
+
+
+def _score_feedback_history(item: dict[str, Any], feedback_history: list[dict[str, Any]]) -> float:
+    if not feedback_history:
+        return 0.0
+    item_category = _normalize_token(item["category"])
+    item_style_tags = {_normalize_token(t) for t in item["style_tags"]}
+    score = 0.0
+    for entry in feedback_history:
+        rating = entry.get("rating", 0)
+        if _normalize_token(entry.get("item_category", "")) == item_category:
+            score += rating * 1.5
+        entry_tags = {_normalize_token(t) for t in (entry.get("item_style_tags") or [])}
+        if item_style_tags & entry_tags:
+            score += rating * 1.0
+    return max(-6.0, min(4.0, score))
+
+
+def _score_utilization(item: dict[str, Any]) -> float:
+    wear_count = item.get("wear_count")
+    if wear_count is None or wear_count == 0:
+        return 2.0
+    if wear_count <= 2:
+        return 1.0
+    if wear_count >= 10:
+        return -0.5
+    return 0.0
+
+
+def _score_diversity(item: dict[str, Any], recent_item_ids: list) -> float:
+    if item.get("id") in recent_item_ids:
+        return -4.0
+    return 0.0
 
 
 def _normalize_item(item: Any) -> dict[str, Any]:
@@ -431,11 +497,14 @@ def _context_text(context: dict[str, Any], key: str) -> str:
     return str(context.get(key) or "").lower()
 
 
-def _temperature(context: dict[str, Any]) -> float:
+def _temperature(context: dict[str, Any]) -> float | None:
+    value = context.get("temperature_c")
+    if value in (None, ""):
+        return None
     try:
-        return float(context.get("temperature_c", 20) or 20)
+        return float(value)
     except (TypeError, ValueError):
-        return 20.0
+        return None
 
 
 def _contains_any(text: str, keywords: set[str]) -> bool:

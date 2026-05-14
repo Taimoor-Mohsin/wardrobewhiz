@@ -13,7 +13,34 @@ export const OutfitRecommendationResult = ({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{recommendation.outfit_name}</CardTitle>
+        <CardTitle className="flex items-center gap-2 flex-wrap">
+          {recommendation.outfit_name}
+          {recommendation.harmony_type && (
+            <Badge variant="secondary" className="text-xs font-normal shrink-0">
+              {recommendation.harmony_type}
+            </Badge>
+          )}
+        </CardTitle>
+        {recommendation.confidence_score !== undefined && (
+          <div className="space-y-1 pt-1">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Match confidence</span>
+              <span className="font-medium text-foreground">{recommendation.confidence_score}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+              <div
+                className={`h-full transition-all ${
+                  recommendation.confidence_score >= 80
+                    ? "bg-green-500"
+                    : recommendation.confidence_score >= 60
+                    ? "bg-amber-500"
+                    : "bg-red-500"
+                }`}
+                style={{ width: `${recommendation.confidence_score}%` }}
+              />
+            </div>
+          </div>
+        )}
         <CardDescription>{recommendation.outfit_description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

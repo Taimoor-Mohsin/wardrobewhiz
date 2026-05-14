@@ -31,6 +31,8 @@ export const WardrobeItemCard = ({
   const fallbackImageSrc = item.imageUrl;
   const [imageError, setImageError] = useState(false);
   const [currentImageSrc, setCurrentImageSrc] = useState(primaryImageSrc);
+  const [localWearCount, setLocalWearCount] = useState(item.wearCount);
+
   const formattedSubcategory = item.subcategory
     ? item.subcategory
         .split("-")
@@ -62,6 +64,10 @@ export const WardrobeItemCard = ({
     setImageError(false);
   }, [primaryImageSrc]);
 
+  useEffect(() => {
+    setLocalWearCount(item.wearCount);
+  }, [item.wearCount]);
+
   const handleImageError = () => {
     if (currentImageSrc !== fallbackImageSrc) {
       console.warn("[WardrobeItemCard] Segmented image failed, falling back to original", {
@@ -75,6 +81,11 @@ export const WardrobeItemCard = ({
     }
 
     setImageError(true);
+  };
+
+  const handleMarkWorn = () => {
+    setLocalWearCount((prev) => prev + 1);
+    onMarkWorn?.(item.id);
   };
 
   return (
@@ -109,7 +120,7 @@ export const WardrobeItemCard = ({
                 </DropdownMenuItem>
               )}
               {onMarkWorn && (
-                <DropdownMenuItem onClick={() => onMarkWorn(item.id)}>
+                <DropdownMenuItem onClick={handleMarkWorn}>
                   <Calendar className="mr-2 h-4 w-4" />
                   Mark as worn
                 </DropdownMenuItem>
@@ -126,6 +137,19 @@ export const WardrobeItemCard = ({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        {onMarkWorn && (
+          <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button
+              variant="secondary"
+              size="icon"
+              className="h-7 w-7"
+              title="Mark as worn"
+              onClick={handleMarkWorn}
+            >
+              <Calendar className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
         <div className="absolute bottom-2 left-2">
           <Badge variant="secondary" className="text-xs">
             {item.category}
@@ -161,9 +185,9 @@ export const WardrobeItemCard = ({
             {displayedColorLabel || "Unknown"}
           </span>
           <span className="text-xs text-muted-foreground">{item.season}</span>
-          {item.wearCount > 0 && (
+          {localWearCount > 0 && (
             <span className="text-xs text-muted-foreground">
-              Worn {item.wearCount}x
+              Worn {localWearCount}x
             </span>
           )}
         </div>
@@ -171,4 +195,3 @@ export const WardrobeItemCard = ({
     </Card>
   );
 };
-
